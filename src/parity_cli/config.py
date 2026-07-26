@@ -21,6 +21,8 @@ class Config:
     language_map: dict[str, str] = field(default_factory=dict)
     # workflow filename -> languages it applies to (["all"] for every repo)
     workflows: dict[str, list[str]] = field(default_factory=dict)
+    # managed repo settings key -> desired value
+    settings: dict[str, object] = field(default_factory=dict)
     # placeholders substituted into templates, e.g. {"owner": "@sondresjolyst"}
     vars: dict[str, str] = field(default_factory=dict)
     repos_include: list[str] = field(default_factory=list)
@@ -65,6 +67,7 @@ def load(path: str | Path) -> Config:
         branch_name=data.get("branch_name", Config.branch_name),
         language_map=lang_map,
         workflows=data.get("workflows", {"dependency-review.yml": ["all"]}),
+        settings=data.get("settings", {}),
         vars=data.get("vars", {}),
         repos_include=data.get("repos_include", []),
         repos_exclude=data.get("repos_exclude", []),

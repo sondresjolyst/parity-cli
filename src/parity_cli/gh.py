@@ -204,6 +204,52 @@ def open_pr(full_name: str, head: str, base: str, title: str, body: str) -> str:
     return str(data["html_url"])
 
 
+def get_repo(full_name: str) -> dict:
+    return dict(api(f"repos/{full_name}"))  # type: ignore[arg-type]
+
+
+def patch_repo(full_name: str, fields: dict) -> None:
+    _api_json(f"repos/{full_name}", "PATCH", fields)
+
+
+def workflow_permissions(full_name: str) -> dict:
+    return dict(api(f"repos/{full_name}/actions/permissions/workflow"))  # type: ignore[arg-type]
+
+
+def set_workflow_permissions(full_name: str, default_permissions: str,
+                             can_approve: bool) -> None:
+    _api_json(
+        f"repos/{full_name}/actions/permissions/workflow",
+        "PUT",
+        {
+            "default_workflow_permissions": default_permissions,
+            "can_approve_pull_request_reviews": can_approve,
+        },
+    )
+
+
+def vulnerability_alerts_enabled(full_name: str) -> bool:
+    return _run(["api", f"repos/{full_name}/vulnerability-alerts"],
+                check=False).returncode == 0
+
+
+def set_vulnerability_alerts(full_name: str, enabled: bool) -> None:
+    method = "PUT" if enabled else "DELETE"
+    _run(["api", "-X", method, f"repos/{full_name}/vulnerability-alerts"])
+
+
+def automated_security_fixes_enabled(full_name: str) -> bool:
+    proc = _run(["api", f"repos/{full_name}/automated-security-fixes"], check=False)
+    if proc.returncode != 0 or not proc.stdout.strip():
+        return False
+    return bool(json.loads(proc.stdout).get("enabled"))
+
+
+def set_automated_security_fixes(full_name: str, enabled: bool) -> None:
+    method = "PUT" if enabled else "DELETE"
+    _run(["api", "-X", method, f"repos/{full_name}/automated-security-fixes"])
+
+
 def search_prs(owner: str, head: str) -> list[dict]:
     fields = "number,title,url,repository,createdAt"
     out = _run([

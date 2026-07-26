@@ -15,6 +15,7 @@ from textual.widgets import DataTable, Footer, Header, Static
 
 from . import apply as apply_mod
 from . import drift, gh, messages
+from . import settings as settings_mod
 from .config import Config
 from .model import RepoResult, Status
 
@@ -36,6 +37,80 @@ def _cell(statuses: list[Status]) -> Text:
             break
     label = "ok" if worst is Status.MATCH else worst.value
     return Text(label, style=_STYLE[worst])
+
+
+class SettingsScreen(ModalScreen):
+    BINDINGS = [
+        Binding("escape,q", "dismiss", "Close"),
+        Binding("r", "rescan", "Rescan"),
+        Binding("a", "apply", "Apply all"),
+    ]
+    CSS = """
+    SettingsScreen { align: center middle; }
+    SettingsScreen VerticalScroll {
+        width: 90%; height: 90%; border: round white; padding: 1 2;
+    }
+    """
+
+    def __init__(self, config: Config) -> None:
+        super().__init__()
+        self.config = config
+        self.results: list[settings_mod.RepoSettings] = []
+
+    def compose(self) -> ComposeResult:
+        with VerticalScroll():
+            yield DataTable(cursor_type="row")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        table = self.query_one(DataTable)
+        table.add_columns("Repo", "Setting", "Current", "Desired")
+        self.action_rescan()
+
+    @work(thread=True, exclusive=True)
+    def _scan(self) -> None:
+        results = settings_mod.scan_settings(self.config)
+        self.app.call_from_thread(self._populate, results)
+
+    def _populate(self, results: list[settings_mod.RepoSettings]) -> None:
+        self.results = results
+        table = self.query_one(DataTable)
+        table.clear()
+        drifted = 0
+        for r in sorted(results, key=lambda x: x.repo.lower()):
+            for d in r.drift:
+                drifted += 1
+                table.add_row(
+                    r.repo, d.key,
+                    Text(str(d.current), style="red"),
+                    Text(str(d.desired), style="green"),
+                )
+        self.title = "settings"
+        self.sub_title = f"{drifted} drift across {len(results)} repos"
+
+    def action_rescan(self) -> None:
+        self.sub_title = "scanning…"
+        self._scan()
+
+    @work(thread=True, exclusive=True)
+    def _apply(self, results: list[settings_mod.RepoSettings]) -> None:
+        for r in results:
+            try:
+                settings_mod.apply_settings(r, self.config)
+                self.app.call_from_thread(self.notify, f"{r.repo} fixed")
+            except gh.GhError as exc:
+                self.app.call_from_thread(
+                    self.notify, f"{r.repo}: {exc}", severity="error"
+                )
+        self.app.call_from_thread(self.action_rescan)
+
+    def action_apply(self) -> None:
+        drifted = [r for r in self.results if r.drift and not r.error]
+        if not drifted:
+            self.notify("no settings drift", severity="warning")
+            return
+        self.notify(f"applying settings to {len(drifted)} repo(s)…")
+        self._apply(drifted)
 
 
 class DiffScreen(ModalScreen):
@@ -75,6 +150,7 @@ class ParityApp(App):
         Binding("space", "toggle", "Select"),
         Binding("d,enter", "diff", "Diff"),
         Binding("o", "open_pr", "Open PR"),
+        Binding("s", "settings", "Settings"),
         Binding("a", "apply", "Apply selected"),
         Binding("q", "quit", "Quit"),
     ]
@@ -197,6 +273,9 @@ class ParityApp(App):
         repo = self._cursor_repo()
         if repo and repo in self.results:
             self.push_screen(DiffScreen(self.results[repo]))
+
+    def action_settings(self) -> None:
+        self.push_screen(SettingsScreen(self.config))
 
     def action_open_pr(self) -> None:
         repo = self._cursor_repo()

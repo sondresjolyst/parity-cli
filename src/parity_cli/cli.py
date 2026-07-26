@@ -38,7 +38,7 @@ _STATUS_STYLE = {
 }
 
 
-def _scan(cfg):
+def _with_progress(description, run):
     with Progress(
         TextColumn("[bold]{task.description}"),
         BarColumn(),
@@ -50,12 +50,19 @@ def _scan(cfg):
         state: dict[str, int] = {}
 
         def start(total: int) -> None:
-            state["task"] = progress.add_task(f"scanning {cfg.owner}", total=total)
+            state["task"] = progress.add_task(description, total=total)
 
         def step() -> None:
             progress.advance(state["task"])
 
-        return drift.scan(cfg, on_start=start, on_progress=step)
+        return run(start, step)
+
+
+def _scan(cfg):
+    return _with_progress(
+        f"scanning {cfg.owner}",
+        lambda start, step: drift.scan(cfg, on_start=start, on_progress=step),
+    )
 
 
 @app.command()
@@ -209,6 +216,50 @@ def prs(config: Path = CONFIG_OPT) -> None:
         console.print(f"[bold]{name}[/]  [dim]{date}[/]")
         console.print(f"  [cyan]{r.get('url', '')}[/]", highlight=False)
     console.print(f"\n{len(rows)} open parity PR(s).")
+
+
+@app.command()
+def settings(
+    apply: bool = typer.Option(False, "--apply", help="Apply the fixes."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation."),
+    config: Path = CONFIG_OPT,
+) -> None:
+    """Show (and optionally fix) repo settings drift across all repos."""
+    from . import settings as settings_mod
+
+    cfg = config_mod.load(config)
+    if not cfg.settings:
+        console.print("[yellow]no settings configured in parity.yml[/]")
+        return
+    results = _with_progress(
+        f"checking settings {cfg.owner}",
+        lambda start, step: settings_mod.scan_settings(
+            cfg, on_start=start, on_progress=step
+        ),
+    )
+    drifted = [r for r in results if r.drift and not r.error]
+
+    table = Table(show_lines=False)
+    table.add_column("Repo", no_wrap=True)
+    table.add_column("Setting", no_wrap=True)
+    table.add_column("Current")
+    table.add_column("Desired")
+    for r in sorted(drifted, key=lambda x: x.repo.lower()):
+        for d in r.drift:
+            table.add_row(r.repo, d.key, f"[red]{d.current}[/]", f"[green]{d.desired}[/]")
+    console.print(table)
+    console.print(f"\n{len(drifted)} repo(s) with settings drift.")
+
+    if not apply or not drifted:
+        return
+    if not yes and not typer.confirm(f"Apply fixes to {len(drifted)} repo(s)?"):
+        raise typer.Abort()
+    for r in drifted:
+        try:
+            settings_mod.apply_settings(r, cfg)
+            console.print(f"[green]✓ {r.repo}[/] ({len(r.drift)} fixed)")
+        except Exception as exc:  # noqa: BLE001
+            console.print(f"[red]✗ {r.repo}[/]: {exc}")
 
 
 @app.command()

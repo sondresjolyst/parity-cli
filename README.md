@@ -17,6 +17,7 @@ uv sync --native-tls
 ```sh
 parity status                 # drift table across all repos
 parity prs                    # list open PRs parity has created
+parity settings               # repo settings drift (add --apply to fix)
 parity diff <repo>            # unified diff for one repo
 parity tui                    # interactive dashboard
 parity apply                  # branch + commit + PR for every drifted repo
@@ -35,6 +36,7 @@ per repo; the commit message names what changed.
 | `space` | select/deselect repo |
 | `d` / `enter` | show diff |
 | `o` | open the repo's parity PR |
+| `s` | repo settings drift screen |
 | `a` | apply selected |
 | `q` | quit |
 
@@ -65,6 +67,17 @@ branch_name: parity/sync-standards
 
 workflows:
   dependency-review.yml: [all] # filename -> languages (["all"] = every repo)
+
+settings:                      # managed repo settings (parity settings)
+  delete_branch_on_merge: true
+  squash_merge_commit_title: PR_TITLE
+  squash_merge_commit_message: PR_BODY
+  has_wiki: false
+  allow_update_branch: true
+  actions_default_workflow_permissions: read
+  actions_can_approve_pull_request_reviews: true
+  dependabot_alerts: true
+  dependabot_security_updates: true
 
 vars:
   owner: "@sondresjolyst"
