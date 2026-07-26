@@ -57,6 +57,14 @@ def _compare(desired: DesiredFile, current: str | None) -> FileResult:
     return FileResult(desired.path, desired.kind, status, desired.content, current)
 
 
+def _resolve_python_tool(repo: gh.Repo, dirs: list[str]) -> list[str]:
+    if "python" not in dirs:
+        return dirs
+    if gh.get_file(repo.full_name, "uv.lock", repo.default_branch) is None:
+        return dirs
+    return ["uv" if d == "python" else d for d in dirs]
+
+
 def scan_repo(repo: gh.Repo, config: Config) -> RepoResult:
     result = RepoResult(
         repo=repo.name,
@@ -68,6 +76,7 @@ def scan_repo(repo: gh.Repo, config: Config) -> RepoResult:
     try:
         langs = gh.languages(repo.full_name)
         dirs = template_dirs(langs, config)
+        dirs = _resolve_python_tool(repo, dirs)
         result.languages = dirs
         desired = desired_files(
             dirs, config, private=repo.private, repo=repo.name,

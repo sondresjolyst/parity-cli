@@ -1,6 +1,23 @@
-from parity_cli import drift
+from parity_cli import drift, gh
 from parity_cli.detect import template_dirs
 from parity_cli.model import DesiredFile, Kind, Status
+
+_REPO = gh.Repo("r", "o/r", "main", False, False, False)
+
+
+def test_python_repo_with_uv_lock_uses_uv(monkeypatch):
+    monkeypatch.setattr(gh, "get_file", lambda *a, **k: "lock contents")
+    assert drift._resolve_python_tool(_REPO, ["python"]) == ["uv"]
+
+
+def test_python_repo_without_uv_lock_stays_pip(monkeypatch):
+    monkeypatch.setattr(gh, "get_file", lambda *a, **k: None)
+    assert drift._resolve_python_tool(_REPO, ["python"]) == ["python"]
+
+
+def test_non_python_untouched(monkeypatch):
+    monkeypatch.setattr(gh, "get_file", lambda *a, **k: "lock")
+    assert drift._resolve_python_tool(_REPO, ["node"]) == ["node"]
 
 
 def test_detect_above_threshold(config):
