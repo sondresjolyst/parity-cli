@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.0](https://github.com/sondresjolyst/parity-cli/compare/v0.1.1...v0.2.0) (2026-07-26)
+
+
+### Features
+
+* audit and fix repo settings drift across repos ([7e9bbaf](https://github.com/sondresjolyst/parity-cli/commit/7e9bbaf681d0fe5e30b810923f26b8131253a2f8))
+* settings as a tab with per-setting select and parallel apply ([#7](https://github.com/sondresjolyst/parity-cli/issues/7)) ([e3993f0](https://github.com/sondresjolyst/parity-cli/commit/e3993f04c3e78e0609b6317b7b5fb83cfef57f2e))
+
 ## [0.1.1](https://github.com/sondresjolyst/parity-cli/compare/v0.1.0...v0.1.1) (2026-07-26)
 
 
