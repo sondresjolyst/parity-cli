@@ -11,7 +11,14 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import DataTable, Footer, Header, Static
+from textual.widgets import (
+    DataTable,
+    Footer,
+    Header,
+    Static,
+    TabbedContent,
+    TabPane,
+)
 
 from . import apply as apply_mod
 from . import drift, gh, messages
@@ -37,80 +44,6 @@ def _cell(statuses: list[Status]) -> Text:
             break
     label = "ok" if worst is Status.MATCH else worst.value
     return Text(label, style=_STYLE[worst])
-
-
-class SettingsScreen(ModalScreen):
-    BINDINGS = [
-        Binding("escape,q", "dismiss", "Close"),
-        Binding("r", "rescan", "Rescan"),
-        Binding("a", "apply", "Apply all"),
-    ]
-    CSS = """
-    SettingsScreen { align: center middle; }
-    SettingsScreen VerticalScroll {
-        width: 90%; height: 90%; border: round white; padding: 1 2;
-    }
-    """
-
-    def __init__(self, config: Config) -> None:
-        super().__init__()
-        self.config = config
-        self.results: list[settings_mod.RepoSettings] = []
-
-    def compose(self) -> ComposeResult:
-        with VerticalScroll():
-            yield DataTable(cursor_type="row")
-        yield Footer()
-
-    def on_mount(self) -> None:
-        table = self.query_one(DataTable)
-        table.add_columns("Repo", "Setting", "Current", "Desired")
-        self.action_rescan()
-
-    @work(thread=True, exclusive=True)
-    def _scan(self) -> None:
-        results = settings_mod.scan_settings(self.config)
-        self.app.call_from_thread(self._populate, results)
-
-    def _populate(self, results: list[settings_mod.RepoSettings]) -> None:
-        self.results = results
-        table = self.query_one(DataTable)
-        table.clear()
-        drifted = 0
-        for r in sorted(results, key=lambda x: x.repo.lower()):
-            for d in r.drift:
-                drifted += 1
-                table.add_row(
-                    r.repo, d.key,
-                    Text(str(d.current), style="red"),
-                    Text(str(d.desired), style="green"),
-                )
-        self.title = "settings"
-        self.sub_title = f"{drifted} drift across {len(results)} repos"
-
-    def action_rescan(self) -> None:
-        self.sub_title = "scanning…"
-        self._scan()
-
-    @work(thread=True, exclusive=True)
-    def _apply(self, results: list[settings_mod.RepoSettings]) -> None:
-        for r in results:
-            try:
-                settings_mod.apply_settings(r, self.config)
-                self.app.call_from_thread(self.notify, f"{r.repo} fixed")
-            except gh.GhError as exc:
-                self.app.call_from_thread(
-                    self.notify, f"{r.repo}: {exc}", severity="error"
-                )
-        self.app.call_from_thread(self.action_rescan)
-
-    def action_apply(self) -> None:
-        drifted = [r for r in self.results if r.drift and not r.error]
-        if not drifted:
-            self.notify("no settings drift", severity="warning")
-            return
-        self.notify(f"applying settings to {len(drifted)} repo(s)…")
-        self._apply(drifted)
 
 
 class DiffScreen(ModalScreen):
@@ -150,8 +83,7 @@ class ParityApp(App):
         Binding("space", "toggle", "Select"),
         Binding("d,enter", "diff", "Diff"),
         Binding("o", "open_pr", "Open PR"),
-        Binding("s", "settings", "Settings"),
-        Binding("a", "apply", "Apply selected"),
+        Binding("a", "apply", "Apply"),
         Binding("q", "quit", "Quit"),
     ]
 
@@ -161,60 +93,108 @@ class ParityApp(App):
         self.results: dict[str, RepoResult] = {}
         self.selected: set[str] = set()
         self.prs: dict[str, str] = {}
+        self.settings_results: list[settings_mod.RepoSettings] = []
+        self.settings_selected: set[tuple[str, str]] = set()
+        self._pending_settings: dict[str, set[str]] = {}
+        self._settings_loaded = False
+        self._scan_gen = 0
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
-        yield DataTable(cursor_type="row", zebra_stripes=True)
+        with TabbedContent(initial="drift"):
+            with TabPane("Drift", id="drift"):
+                yield DataTable(id="repos", cursor_type="row", zebra_stripes=True)
+            with TabPane("Settings", id="settings"):
+                yield DataTable(id="settings-table", cursor_type="row", zebra_stripes=True)
         yield Footer()
 
     def on_mount(self) -> None:
-        table = self.query_one(DataTable)
-        table.add_columns(
+        repos = self.query_one("#repos", DataTable)
+        repos.add_columns(
             "", "Repo", "Languages", "Dependabot", "CODEOWNERS", "Workflows", "PR"
         )
+        settings_table = self.query_one("#settings-table", DataTable)
+        settings_table.add_columns("", "Repo", "Setting", "Current", "Desired")
         self.title = f"parity — {self.config.owner}"
-        self.action_rescan()
+        self._scan()
+
+    def _active(self) -> str:
+        return self.query_one(TabbedContent).active
+
+    def on_tabbed_content_tab_activated(
+        self, event: TabbedContent.TabActivated
+    ) -> None:
+        if event.pane.id == "settings":
+            if not self._settings_loaded:
+                self._settings_loaded = True
+                self._scan_settings()
+        elif event.pane.id == "drift" and not self.results:
+            self._scan()
+
+    # ---- shared scan/apply plumbing (used by both tabs) ----
+
+    @work(thread=True, exclusive=True, group="scan")
+    def _run_scan(self, label, scan_fn, populate) -> None:
+        gen = self.call_from_thread(self._scan_start, label)
+        results = scan_fn(
+            lambda total: self.call_from_thread(self._scan_total, gen, total),
+            lambda: self.call_from_thread(self._scan_step, gen),
+        )
+        self.call_from_thread(populate, gen, results)
 
     @work(thread=True, exclusive=True)
-    def _scan(self) -> None:
-        self.call_from_thread(self._scan_start)
+    def _run_apply(self, run_apply, on_each, after=None) -> None:
+        run_apply(lambda res: self.call_from_thread(on_each, res))
+        if after is not None:
+            self.call_from_thread(after)
 
-        def start(total: int) -> None:
-            self.call_from_thread(self._scan_total, total)
-
-        def step() -> None:
-            self.call_from_thread(self._scan_step)
-
-        results = drift.scan(self.config, on_start=start, on_progress=step)
-        prs: dict[str, str] = {}
-        try:
-            for pr in gh.search_prs(self.config.owner, self.config.branch_name):
-                prs[pr.get("repository", {}).get("name", "")] = pr.get("url", "")
-        except gh.GhError:
-            pass
-        self.call_from_thread(self._populate, results, prs)
-
-    def _scan_start(self) -> None:
+    def _scan_start(self, label: str) -> int:
+        self._scan_gen += 1
+        self._scan_label = label
         self._scan_done = 0
         self._scan_total_n = 0
-        self.sub_title = "scanning…"
+        self.sub_title = f"{label}…"
+        return self._scan_gen
 
-    def _scan_total(self, total: int) -> None:
+    def _scan_total(self, gen: int, total: int) -> None:
+        if gen != self._scan_gen:
+            return
         self._scan_total_n = total
-        self.sub_title = f"scanning 0/{total}"
+        self.sub_title = f"{self._scan_label} 0/{total}"
 
-    def _scan_step(self) -> None:
+    def _scan_step(self, gen: int) -> None:
+        if gen != self._scan_gen:
+            return
         self._scan_done += 1
-        self.sub_title = f"scanning {self._scan_done}/{self._scan_total_n}"
+        self.sub_title = f"{self._scan_label} {self._scan_done}/{self._scan_total_n}"
 
-    def _populate(self, results: list[RepoResult], prs: dict[str, str]) -> None:
+    # ---- drift tab ----
+
+    def _scan(self) -> None:
+        def run(on_start, on_progress):
+            results = drift.scan(
+                self.config, on_start=on_start, on_progress=on_progress
+            )
+            prs: dict[str, str] = {}
+            try:
+                for pr in gh.search_prs(self.config.owner, self.config.branch_name):
+                    prs[pr.get("repository", {}).get("name", "")] = pr.get("url", "")
+            except gh.GhError:
+                pass
+            return results, prs
+
+        self._run_scan("scanning", run, self._populate)
+
+    def _populate(self, gen: int, data) -> None:
+        results, prs = data
         self.results = {r.repo: r for r in results}
         self.prs = prs
-        table = self.query_one(DataTable)
+        table = self.query_one("#repos", DataTable)
         table.clear()
         for r in sorted(results, key=lambda x: x.repo.lower()):
             table.add_row(*self._row(r), key=r.repo)
-        self._set_subtitle()
+        if gen == self._scan_gen:
+            self._set_subtitle()
 
     def _set_subtitle(self) -> None:
         drifted = sum(1 for r in self.results.values() if r.changed and not r.error)
@@ -247,22 +227,21 @@ class ParityApp(App):
         ]
 
     def _cursor_repo(self) -> str | None:
-        table = self.query_one(DataTable)
+        table = self.query_one("#repos", DataTable)
         if table.row_count == 0:
             return None
         return table.coordinate_to_cell_key((table.cursor_row, 0)).row_key.value
 
     def _refresh_row(self, repo: str) -> None:
-        table = self.query_one(DataTable)
+        table = self.query_one("#repos", DataTable)
         r = self.results[repo]
         for col, value in zip(table.columns.keys(), self._row(r)):
             table.update_cell(repo, col, value)
 
-    def action_rescan(self) -> None:
-        self.sub_title = "scanning…"
-        self._scan()
-
     def action_toggle(self) -> None:
+        if self._active() == "settings":
+            self._toggle_setting()
+            return
         repo = self._cursor_repo()
         if not repo:
             return
@@ -270,14 +249,15 @@ class ParityApp(App):
         self._refresh_row(repo)
 
     def action_diff(self) -> None:
+        if self._active() != "drift":
+            return
         repo = self._cursor_repo()
         if repo and repo in self.results:
             self.push_screen(DiffScreen(self.results[repo]))
 
-    def action_settings(self) -> None:
-        self.push_screen(SettingsScreen(self.config))
-
     def action_open_pr(self) -> None:
+        if self._active() != "drift":
+            return
         repo = self._cursor_repo()
         url = self.prs.get(repo) if repo else None
         if url:
@@ -286,14 +266,14 @@ class ParityApp(App):
         else:
             self.notify("no open parity PR for this repo", severity="warning")
 
-    @work(thread=True, exclusive=True)
     def _apply(self, repos: list[str]) -> None:
         targets = [self.results[r] for r in repos]
-
-        def report(res: apply_mod.ApplyResult) -> None:
-            self.call_from_thread(self._apply_done, res)
-
-        apply_mod.apply_many(targets, self.config, on_result=report)
+        self._run_apply(
+            lambda report: apply_mod.apply_many(
+                targets, self.config, on_result=report
+            ),
+            self._apply_done,
+        )
 
     def _apply_done(self, res: apply_mod.ApplyResult) -> None:
         if res.error:
@@ -307,7 +287,7 @@ class ParityApp(App):
         self._set_subtitle()
         self.notify(f"{res.repo} → {res.pr_url or res.commit}")
 
-    def action_apply(self) -> None:
+    def _apply_drift(self) -> None:
         if not self.selected:
             self.notify("select repos first (space)", severity="warning")
             return
@@ -323,3 +303,126 @@ class ParityApp(App):
         )
         self.notify(f"applying {len(targets)} repo(s)…\n{subjects}", timeout=4)
         self._apply(targets)
+
+    # ---- settings tab ----
+
+    def _scan_settings(self) -> None:
+        self._run_scan(
+            "checking settings",
+            lambda on_start, on_progress: settings_mod.scan_settings(
+                self.config, on_start=on_start, on_progress=on_progress
+            ),
+            self._populate_settings,
+        )
+
+    def _settings_mark(self, repo: str, key: str) -> Text:
+        return (Text("●", style="cyan")
+                if (repo, key) in self.settings_selected else Text(" "))
+
+    def _populate_settings(
+        self, gen: int, results: list[settings_mod.RepoSettings]
+    ) -> None:
+        self.settings_results = results
+        table = self.query_one("#settings-table", DataTable)
+        table.clear()
+        drifted = 0
+        for r in sorted(results, key=lambda x: x.repo.lower()):
+            for d in r.drift:
+                drifted += 1
+                table.add_row(
+                    self._settings_mark(r.repo, d.key), r.repo, d.key,
+                    Text(str(d.current), style="red"),
+                    Text(str(d.desired), style="green"),
+                    key=f"{r.repo}|{d.key}",
+                )
+        if gen == self._scan_gen:
+            self._set_settings_subtitle()
+
+    def _set_settings_subtitle(self) -> None:
+        drifted = sum(len(r.drift) for r in self.settings_results)
+        self.sub_title = (
+            f"settings · {drifted} drift across {len(self.settings_results)} repos"
+        )
+
+    def _settings_cursor(self) -> tuple[str, str] | None:
+        table = self.query_one("#settings-table", DataTable)
+        if table.row_count == 0:
+            return None
+        row_key = table.coordinate_to_cell_key((table.cursor_row, 0)).row_key.value
+        repo, _, key = row_key.partition("|")
+        return repo, key
+
+    def _toggle_setting(self) -> None:
+        pair = self._settings_cursor()
+        if not pair:
+            return
+        self.settings_selected.symmetric_difference_update({pair})
+        table = self.query_one("#settings-table", DataTable)
+        table.update_cell(f"{pair[0]}|{pair[1]}",
+                          next(iter(table.columns.keys())),
+                          self._settings_mark(*pair))
+
+    def _apply_settings(self, targets: list[tuple[str, str, list]]) -> None:
+        self._pending_settings = {repo: {d.key for d in drifts}
+                                  for _, repo, drifts in targets}
+        self._run_apply(
+            lambda report: settings_mod.apply_many(
+                targets, self.config, on_result=report
+            ),
+            self._settings_applied,
+        )
+
+    def _settings_applied(self, res: settings_mod.ApplyResult) -> None:
+        if not res.ok:
+            self.notify(f"{res.repo}: {res.error}", severity="error", timeout=8)
+            return
+        keys = self._pending_settings.get(res.repo, set())
+        table = self.query_one("#settings-table", DataTable)
+        for key in keys:
+            try:
+                table.remove_row(f"{res.repo}|{key}")
+            except Exception:  # noqa: BLE001
+                pass
+            self.settings_selected.discard((res.repo, key))
+        for rs in self.settings_results:
+            if rs.repo == res.repo:
+                rs.drift = [d for d in rs.drift if d.key not in keys]
+        self._set_settings_subtitle()
+        self.notify(f"{res.repo} settings fixed")
+
+    def _apply_settings_drift(self) -> None:
+        if not self.settings_selected:
+            self.notify("select settings first (space)", severity="warning")
+            return
+        lookup = {r.repo: r for r in self.settings_results}
+        by_repo: dict[str, set[str]] = {}
+        for repo, key in self.settings_selected:
+            by_repo.setdefault(repo, set()).add(key)
+        targets = []
+        for repo, keys in by_repo.items():
+            rs = lookup.get(repo)
+            if not rs:
+                continue
+            drifts = [d for d in rs.drift if d.key in keys]
+            if drifts:
+                targets.append((rs.full_name, repo, drifts))
+        if not targets:
+            self.notify("nothing to apply", severity="warning")
+            return
+        self.settings_selected.clear()
+        self.notify(f"applying settings to {len(targets)} repo(s)…")
+        self._apply_settings(targets)
+
+    # ---- shared actions (dispatch by active tab) ----
+
+    def action_rescan(self) -> None:
+        if self._active() == "settings":
+            self._scan_settings()
+        else:
+            self._scan()
+
+    def action_apply(self) -> None:
+        if self._active() == "settings":
+            self._apply_settings_drift()
+        else:
+            self._apply_drift()

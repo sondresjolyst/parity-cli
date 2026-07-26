@@ -110,31 +110,66 @@ def scan_settings(
     return results
 
 
-def apply_settings(result: RepoSettings, config: Config) -> None:
-    keys = {d.key for d in result.drift}
-    repo_patch = {
-        d.key: d.desired for d in result.drift if d.key in REPO_FIELDS
-    }
+def apply_drifts(full_name: str, drifts: list[SettingDrift], config: Config) -> None:
+    keys = {d.key for d in drifts}
+    repo_patch = {d.key: d.desired for d in drifts if d.key in REPO_FIELDS}
     if repo_patch:
-        gh.patch_repo(result.full_name, repo_patch)
+        gh.patch_repo(full_name, repo_patch)
     if keys & set(ACTIONS_FIELDS):
-        current = gh.workflow_permissions(result.full_name)
-        gh.set_workflow_permissions(
-            result.full_name,
-            str(config.settings.get(
-                "actions_default_workflow_permissions",
-                current.get("default_workflow_permissions", "read"),
-            )),
-            bool(config.settings.get(
-                "actions_can_approve_pull_request_reviews",
-                current.get("can_approve_pull_request_reviews", False),
-            )),
+        current = gh.workflow_permissions(full_name)
+        default = (
+            config.settings["actions_default_workflow_permissions"]
+            if "actions_default_workflow_permissions" in keys
+            else current.get("default_workflow_permissions", "read")
         )
+        approve = (
+            config.settings["actions_can_approve_pull_request_reviews"]
+            if "actions_can_approve_pull_request_reviews" in keys
+            else current.get("can_approve_pull_request_reviews", False)
+        )
+        gh.set_workflow_permissions(full_name, str(default), bool(approve))
     if "dependabot_alerts" in keys:
         gh.set_vulnerability_alerts(
-            result.full_name, bool(config.settings["dependabot_alerts"])
+            full_name, bool(config.settings["dependabot_alerts"])
         )
     if "dependabot_security_updates" in keys:
         gh.set_automated_security_fixes(
-            result.full_name, bool(config.settings["dependabot_security_updates"])
+            full_name, bool(config.settings["dependabot_security_updates"])
         )
+
+
+def apply_settings(result: RepoSettings, config: Config) -> None:
+    apply_drifts(result.full_name, result.drift, config)
+
+
+@dataclass
+class ApplyResult:
+    repo: str
+    ok: bool
+    error: str | None = None
+
+
+def apply_many(
+    targets: list[tuple[str, str, list[SettingDrift]]],
+    config: Config,
+    *,
+    workers: int = 8,
+    on_result: Callable[[ApplyResult], None] | None = None,
+) -> list[ApplyResult]:
+    def run(target: tuple[str, str, list[SettingDrift]]) -> ApplyResult:
+        full_name, repo, drifts = target
+        try:
+            apply_drifts(full_name, drifts, config)
+            return ApplyResult(repo, True)
+        except gh.GhError as exc:
+            return ApplyResult(repo, False, str(exc))
+
+    out: list[ApplyResult] = []
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(run, t) for t in targets]
+        for future in as_completed(futures):
+            res = future.result()
+            out.append(res)
+            if on_result:
+                on_result(res)
+    return out
