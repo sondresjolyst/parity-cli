@@ -1,0 +1,24 @@
+owner: sondresjolyst
+templates_dir: templates
+workflows_dir: .github/workflows
+
+language_threshold: 0.10
+include_archived: false
+include_forks: false
+
+branch_name: parity/sync-standards
+
+workflows:
+  dependency-review.yml:
+    languages: [all]
+    visibility: public   # dependency-review needs a public repo / GHAS
+  dependabot-title.yml: [all]
+
+vars:
+  owner: "@sondresjolyst"
+
+# repos_include: []   # only these repos (empty = all)
+# repos_exclude: []   # skip these repos
+
+# language_map:       # override GitHub language -> template dir
+#   TypeScript: node

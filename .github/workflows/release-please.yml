@@ -1,0 +1,17 @@
+name: 🚀 Release
+
+on:
+  push:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  release-please:
+    name: Release Please
+    if: ${{ github.event_name == 'push' }}
+    uses: equinor/ops-actions/.github/workflows/release-please-manifest.yml@e8dfd5776985e7d74c93787841b1a1b830d80175 # v9.39.1
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
