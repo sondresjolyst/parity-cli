@@ -220,6 +220,7 @@ def prs(config: Path = CONFIG_OPT) -> None:
 
 @app.command()
 def settings(
+    repo: list[str] = typer.Option(None, "--repo", "-r", help="Limit to repo(s)."),
     apply: bool = typer.Option(False, "--apply", help="Apply the fixes."),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation."),
     config: Path = CONFIG_OPT,
@@ -238,6 +239,8 @@ def settings(
         ),
     )
     drifted = [r for r in results if r.drift and not r.error]
+    if repo:
+        drifted = [r for r in drifted if r.repo in repo]
 
     table = Table(show_lines=False)
     table.add_column("Repo", no_wrap=True)
@@ -254,12 +257,16 @@ def settings(
         return
     if not yes and not typer.confirm(f"Apply fixes to {len(drifted)} repo(s)?"):
         raise typer.Abort()
-    for r in drifted:
-        try:
-            settings_mod.apply_settings(r, cfg)
-            console.print(f"[green]✓ {r.repo}[/] ({len(r.drift)} fixed)")
-        except Exception as exc:  # noqa: BLE001
-            console.print(f"[red]✗ {r.repo}[/]: {exc}")
+    counts = {r.repo: len(r.drift) for r in drifted}
+    targets = [(r.full_name, r.repo, r.drift) for r in drifted]
+
+    def report(res: settings_mod.ApplyResult) -> None:
+        if res.ok:
+            console.print(f"[green]✓ {res.repo}[/] ({counts[res.repo]} fixed)")
+        else:
+            console.print(f"[red]✗ {res.repo}[/]: {res.error}")
+
+    settings_mod.apply_many(targets, cfg, on_result=report)
 
 
 @app.command()
