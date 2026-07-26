@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/sondresjolyst/parity-cli/compare/v0.1.0...v0.1.1) (2026-07-26)
+
+
+### Bug Fixes
+
+* use uv ecosystem for python repos with a uv.lock ([e89c4f9](https://github.com/sondresjolyst/parity-cli/commit/e89c4f994931fa2b12b68577a7cdac32e3fb1c90))
+
 ## 0.1.0 (2026-07-26)
 
 
