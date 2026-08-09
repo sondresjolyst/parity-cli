@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.2](https://github.com/sondresjolyst/parity-cli/compare/v0.2.1...v0.2.2) (2026-08-09)
+
+
+### Dependencies
+
+* **github-actions:** bump `equinor/ops-actions/.github/workflows/release-please-manifest.yml` from 9.39.3 to 9.39.4 ([#10](https://github.com/sondresjolyst/parity-cli/issues/10)) ([3a98540](https://github.com/sondresjolyst/parity-cli/commit/3a985403935369f6b24aaefc97b7efea59af8c7e))
+* **uv:** bump `uv-build` from 0.11.32 to 0.12.1 ([#11](https://github.com/sondresjolyst/parity-cli/issues/11)) ([38d42a3](https://github.com/sondresjolyst/parity-cli/commit/38d42a3e999925d414d36a398c16e68bda9c237c))
+
 ## [0.2.1](https://github.com/sondresjolyst/parity-cli/compare/v0.2.0...v0.2.1) (2026-08-02)
 
 
