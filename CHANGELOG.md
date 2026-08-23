@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.4](https://github.com/sondresjolyst/parity-cli/compare/v0.2.3...v0.2.4) (2026-08-23)
+
+
+### Dependencies
+
+* **github-actions:** bump `astral-sh/setup-uv` from 9.0.0 to 10.0.1 ([#20](https://github.com/sondresjolyst/parity-cli/issues/20)) ([8f1864c](https://github.com/sondresjolyst/parity-cli/commit/8f1864c18b81962175c4435bf65f9adadecd3911))
+* **github-actions:** bump `equinor/ops-actions/.github/workflows/release-please-manifest.yml` from 9.39.6 to 9.40.0 ([#18](https://github.com/sondresjolyst/parity-cli/issues/18)) ([a1aab7f](https://github.com/sondresjolyst/parity-cli/commit/a1aab7f97e775446c227544bce224537ceb7f949))
+* **uv:** bump `uv-build` from 0.12.3 to 0.12.5 ([#19](https://github.com/sondresjolyst/parity-cli/issues/19)) ([9f4dfc4](https://github.com/sondresjolyst/parity-cli/commit/9f4dfc40b19282d193ae6304c24a8a22a03b30b1))
+
 ## [0.2.3](https://github.com/sondresjolyst/parity-cli/compare/v0.2.2...v0.2.3) (2026-08-16)
 
 
