@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/sondresjolyst/parity-cli/compare/v0.3.1...v0.3.2) (2026-08-24)
+
+
+### Bug Fixes
+
+* detect unquoted sexagesimal-looking dependabot time as drift ([#26](https://github.com/sondresjolyst/parity-cli/issues/26)) ([2c2dfc3](https://github.com/sondresjolyst/parity-cli/commit/2c2dfc3675164ce7e682da464478f554b787dd58))
+
 ## [0.3.1](https://github.com/sondresjolyst/parity-cli/compare/v0.3.0...v0.3.1) (2026-08-24)
 
 
