@@ -3,6 +3,8 @@
   schedule:
     interval: weekly
     day: sunday
+    time: "03:00"
+    timezone: Europe/Oslo
   cooldown:
     default-days: 7
   commit-message:
