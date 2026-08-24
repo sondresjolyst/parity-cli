@@ -12,7 +12,7 @@ from . import gh
 from .config import Config
 from .detect import template_dirs
 from .model import DesiredFile, FileResult, Kind, RepoResult, Status
-from .templates import desired_files, removable_workflow_paths
+from .templates import desired_files, load_dependabot, removable_workflow_paths
 
 
 _USES = re.compile(r"^(\s*(?:-\s*)?uses:\s*\S+?)@\S+.*$")
@@ -35,7 +35,7 @@ def _strip_action_refs(text: str) -> str:
 def _equal(desired: DesiredFile, current: str) -> bool:
     if desired.kind is Kind.DEPENDABOT:
         try:
-            return yaml.safe_load(desired.content) == yaml.safe_load(current)
+            return load_dependabot(desired.content) == load_dependabot(current)
         except yaml.YAMLError:
             pass
     if desired.kind is Kind.WORKFLOW:

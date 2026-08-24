@@ -38,6 +38,43 @@ def _represent_str(dumper: yaml.SafeDumper, data: str) -> yaml.ScalarNode:
 _DependabotDumper.add_representer(str, _represent_str)
 
 
+_SEXAGESIMAL_TAG = "tag:yaml.org,2002:int:sexagesimal-ambiguous"
+
+
+class _Yaml11Loader(yaml.SafeLoader):
+    """SafeLoader that additionally resolves ambiguous YAML 1.1
+    sexagesimal integers (e.g. 03:00) the way GitHub's own YAML 1.1
+    parser does. PyYAML's SafeLoader treats such plain scalars as plain
+    strings, which makes drift detection blind to files where an
+    unquoted "03:00" would actually be misread as the integer 180
+    elsewhere."""
+
+
+def _construct_sexagesimal(loader: yaml.SafeLoader, node: yaml.ScalarNode) -> int:
+    value = loader.construct_scalar(node)
+    sign = -1 if value.startswith("-") else 1
+    total = 0
+    for part in value.lstrip("+-").split(":"):
+        total = total * 60 + int(part)
+    return sign * total
+
+
+_Yaml11Loader.add_implicit_resolver(
+    _SEXAGESIMAL_TAG, _SEXAGESIMAL_RE, list("-+0123456789")
+)
+_Yaml11Loader.add_constructor(_SEXAGESIMAL_TAG, _construct_sexagesimal)
+
+
+def load_dependabot(text: str):
+    """Parse dependabot.yml content using YAML 1.1 semantics.
+
+    Used for drift comparison so an unquoted "03:00" (parsed as the
+    integer 180) is correctly detected as different from the quoted
+    string "03:00" that parity-cli now generates.
+    """
+    return yaml.load(text, Loader=_Yaml11Loader)
+
+
 def _subst(text: str, variables: dict[str, str]) -> str:
     return Template(text).safe_substitute(variables)
 
