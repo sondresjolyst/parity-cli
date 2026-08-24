@@ -55,6 +55,18 @@ def test_drift_on_real_difference():
     assert _cmp("version: 2\nupdates: []", "version: 2\nupdates: [1]") is Status.DRIFT
 
 
+def test_dependabot_unquoted_sexagesimal_time_is_drift():
+    desired = "schedule:\n  time: '03:00'\n"
+    current = "schedule:\n  time: 03:00\n"
+    assert _cmp(desired, current) is Status.DRIFT
+
+
+def test_dependabot_quoted_time_matches_quoted_time():
+    desired = "schedule:\n  time: '03:00'\n"
+    current = "schedule:\n  time: \"03:00\"\n"
+    assert _cmp(desired, current) is Status.MATCH
+
+
 def test_codeowners_trailing_newline_matches():
     assert _cmp("* @tester\n", "* @tester", Kind.CODEOWNERS) is Status.MATCH
 
