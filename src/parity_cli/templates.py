@@ -18,6 +18,25 @@ CODEOWNERS_PATH = ".github/CODEOWNERS"
 WORKFLOWS_PREFIX = ".github/workflows"
 DEPENDABOT_FRAGMENT = "dependabot.fragment.yml"
 
+# YAML 1.1 core schema resolves unquoted colon-separated digit strings (e.g.
+# "03:00") as sexagesimal integers. PyYAML's own resolver doesn't do this, so
+# safe_dump happily emits them unquoted, but other YAML 1.1 parsers (such as
+# the one GitHub uses to validate dependabot.yml) will misread them as
+# numbers. Force such values to stay quoted strings on output.
+_SEXAGESIMAL_RE = re.compile(r"^[-+]?[0-9][0-9_]*(:[0-5]?[0-9])+(\.[0-9_]*)?$")
+
+
+class _DependabotDumper(yaml.SafeDumper):
+    pass
+
+
+def _represent_str(dumper: yaml.SafeDumper, data: str) -> yaml.ScalarNode:
+    style = "'" if _SEXAGESIMAL_RE.match(data) else None
+    return dumper.represent_scalar("tag:yaml.org,2002:str", data, style=style)
+
+
+_DependabotDumper.add_representer(str, _represent_str)
+
 
 def _subst(text: str, variables: dict[str, str]) -> str:
     return Template(text).safe_substitute(variables)
@@ -41,7 +60,9 @@ def _dependabot(dirs: list[str], config: Config) -> DesiredFile | None:
     if not updates:
         return None
     doc = {"version": 2, "updates": updates}
-    content = yaml.safe_dump(doc, sort_keys=False, default_flow_style=False)
+    content = yaml.dump(
+        doc, Dumper=_DependabotDumper, sort_keys=False, default_flow_style=False
+    )
     return DesiredFile(DEPENDABOT_PATH, Kind.DEPENDABOT, content)
 
 
