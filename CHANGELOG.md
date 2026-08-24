@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/sondresjolyst/parity-cli/compare/v0.3.0...v0.3.1) (2026-08-24)
+
+
+### Bug Fixes
+
+* quote sexagesimal-looking strings when dumping dependabot.yml ([#24](https://github.com/sondresjolyst/parity-cli/issues/24)) ([5b55718](https://github.com/sondresjolyst/parity-cli/commit/5b55718d081a8f3fd3d04ab4069681450509c744))
+
 ## [0.3.0](https://github.com/sondresjolyst/parity-cli/compare/v0.2.4...v0.3.0) (2026-08-24)
 
 
