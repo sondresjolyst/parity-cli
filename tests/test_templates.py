@@ -17,7 +17,12 @@ def test_dependabot_carries_house_settings(config):
     files = templates.desired_files(["python"], config)
     doc = yaml.safe_load(next(f for f in files if f.kind is Kind.DEPENDABOT).content)
     pip = next(u for u in doc["updates"] if u["package-ecosystem"] == "pip")
-    assert pip["schedule"] == {"interval": "weekly", "day": "sunday"}
+    assert pip["schedule"] == {
+        "interval": "weekly",
+        "day": "sunday",
+        "time": "03:00",
+        "timezone": "Europe/Oslo",
+    }
     assert pip["cooldown"] == {"default-days": 7}
     assert pip["commit-message"] == {"prefix": "deps(pip)"}
 
