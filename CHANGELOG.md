@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/sondresjolyst/parity-cli/compare/v0.2.4...v0.3.0) (2026-08-24)
+
+
+### Features
+
+* group github-action updates and add timezone to dependabot ([#22](https://github.com/sondresjolyst/parity-cli/issues/22)) ([e68b761](https://github.com/sondresjolyst/parity-cli/commit/e68b761345db310eca91e5a9b3cc5d0e48af0e16))
+
 ## [0.2.4](https://github.com/sondresjolyst/parity-cli/compare/v0.2.3...v0.2.4) (2026-08-23)
 
 
