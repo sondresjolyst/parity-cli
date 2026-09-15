@@ -24,7 +24,7 @@ from . import apply as apply_mod
 from . import drift, gh, messages
 from . import settings as settings_mod
 from .config import Config
-from .model import RepoResult, Status
+from .model import Kind, RepoResult, Status
 
 _STYLE = {
     Status.MATCH: "green",
@@ -49,16 +49,18 @@ def _cell(statuses: list[Status]) -> Text:
 class DiffScreen(ModalScreen):
     BINDINGS = [Binding("escape,q", "dismiss", "Close")]
 
-    def __init__(self, result: RepoResult) -> None:
+    def __init__(self, result: RepoResult, kinds: set[Kind] | None = None) -> None:
         super().__init__()
         self.result = result
+        self.kinds = kinds
 
     def compose(self) -> ComposeResult:
+        changes = [f for f in self.result.changed if not self.kinds or f.kind in self.kinds]
         with VerticalScroll():
-            if not self.result.changed:
+            if not changes:
                 yield Static(Text("in sync", style="green"))
                 return
-            for f in self.result.changed:
+            for f in changes:
                 head = Text(f"\n{f.path}  ", style="bold")
                 head.append(f.status.value, style=_STYLE[f.status])
                 yield Static(head)
@@ -83,8 +85,14 @@ class ParityApp(App):
         Binding("space", "toggle", "Select"),
         Binding("d,enter", "diff", "Diff"),
         Binding("o", "open_pr", "Open PR"),
+        Binding("f", "cycle_filter", "Filter"),
         Binding("a", "apply", "Apply"),
         Binding("q", "quit", "Quit"),
+    ]
+
+    # cycled by action_cycle_filter; None means all kinds
+    FILTER_OPTIONS: list[set[Kind] | None] = [
+        None, {Kind.DEPENDABOT}, {Kind.CODEOWNERS}, {Kind.WORKFLOW},
     ]
 
     def __init__(self, config: Config) -> None:
@@ -93,6 +101,7 @@ class ParityApp(App):
         self.results: dict[str, RepoResult] = {}
         self.selected: set[str] = set()
         self.prs: dict[str, str] = {}
+        self.active_kinds: set[Kind] | None = None
         self.settings_results: list[settings_mod.RepoSettings] = []
         self.settings_selected: set[tuple[str, str]] = set()
         self._pending_settings: dict[str, set[str]] = {}
@@ -198,9 +207,10 @@ class ParityApp(App):
 
     def _set_subtitle(self) -> None:
         drifted = sum(1 for r in self.results.values() if r.changed and not r.error)
+        label = "all" if self.active_kinds is None else "/".join(k.value for k in self.active_kinds)
         self.sub_title = (
             f"{len(self.results)} repos · {drifted} with drift · "
-            f"{len(self.prs)} open PRs"
+            f"{len(self.prs)} open PRs · filter: {label}"
         )
 
     def _pr_cell(self, repo: str) -> Text:
@@ -248,12 +258,21 @@ class ParityApp(App):
         self.selected.symmetric_difference_update({repo})
         self._refresh_row(repo)
 
+    def action_cycle_filter(self) -> None:
+        if self._active() != "drift":
+            return
+        idx = self.FILTER_OPTIONS.index(self.active_kinds)
+        self.active_kinds = self.FILTER_OPTIONS[(idx + 1) % len(self.FILTER_OPTIONS)]
+        self._set_subtitle()
+        label = "all" if self.active_kinds is None else "/".join(k.value for k in self.active_kinds)
+        self.notify(f"filter: {label}")
+
     def action_diff(self) -> None:
         if self._active() != "drift":
             return
         repo = self._cursor_repo()
         if repo and repo in self.results:
-            self.push_screen(DiffScreen(self.results[repo]))
+            self.push_screen(DiffScreen(self.results[repo], self.active_kinds))
 
     def action_open_pr(self) -> None:
         if self._active() != "drift":
@@ -266,11 +285,16 @@ class ParityApp(App):
         else:
             self.notify("no open parity PR for this repo", severity="warning")
 
+    def _filtered(self, changes: list) -> list:
+        if not self.active_kinds:
+            return changes
+        return [f for f in changes if f.kind in self.active_kinds]
+
     def _apply(self, repos: list[str]) -> None:
         targets = [self.results[r] for r in repos]
         self._run_apply(
             lambda report: apply_mod.apply_many(
-                targets, self.config, on_result=report
+                targets, self.config, only=self.active_kinds, on_result=report
             ),
             self._apply_done,
         )
@@ -293,13 +317,16 @@ class ParityApp(App):
             return
         targets = sorted(
             r for r in self.selected
-            if (res := self.results.get(r)) and res.changed and not res.error
+            if (res := self.results.get(r))
+            and not res.error
+            and self._filtered(res.changed)
         )
         if not targets:
             self.notify("selected repos have no changes", severity="warning")
             return
         subjects = "\n".join(
-            f"{t}: {messages.build(self.results[t].changed)[0]}" for t in targets
+            f"{t}: {messages.build(self._filtered(self.results[t].changed))[0]}"
+            for t in targets
         )
         self.notify(f"applying {len(targets)} repo(s)…\n{subjects}", timeout=4)
         self._apply(targets)

@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 
 from . import gh
-from .config import Config
+from .config import Config, discover_repos
 
 REPO_FIELDS = {
     "delete_branch_on_merge",
@@ -91,8 +91,8 @@ def scan_settings(
     on_progress: Callable[[], None] | None = None,
 ) -> list[RepoSettings]:
     repos = _selected(
-        gh.list_repos(
-            config.owner,
+        discover_repos(
+            config,
             include_archived=config.include_archived,
             include_forks=config.include_forks,
         ),

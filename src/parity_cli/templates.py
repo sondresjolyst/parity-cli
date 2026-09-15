@@ -83,14 +83,29 @@ def _read(path: Path, variables: dict[str, str]) -> str:
     return _subst(path.read_text(encoding="utf-8"), variables)
 
 
-def _dependabot(dirs: list[str], config: Config) -> DesiredFile | None:
+def _template_vars(config: Config) -> dict[str, str]:
+    variables = dict(config.vars)
+    if config.discovery_mode == "team" and "owner" not in variables and config.teams:
+        variables["owner"] = f"@{config.teams[0]}"
+    # Per-ecosystem dependabot commit-message prefixes; override any of these
+    # in a config's `vars` to change or drop the scope for that config.
+    variables.setdefault("uv_commit_prefix", "deps(uv)")
+    variables.setdefault("npm_commit_prefix", "deps(npm)")
+    variables.setdefault("pip_commit_prefix", "deps(pip)")
+    variables.setdefault("nuget_commit_prefix", "deps(nuget)")
+    variables.setdefault("docker_commit_prefix", "deps(docker)")
+    return variables
+
+
+def _dependabot(dirs: list[str], config: Config, *, has_workflows: bool = True) -> DesiredFile | None:
+    variables = _template_vars(config)
     updates: list[dict] = []
-    search = [ACTIONS_DIR, *dirs]
+    search = [*dirs] if not has_workflows else [ACTIONS_DIR, *dirs]
     for name in search:
         fragment = config.templates_dir / name / DEPENDABOT_FRAGMENT
         if not fragment.exists():
             continue
-        parsed = yaml.safe_load(_read(fragment, config.vars)) or []
+        parsed = yaml.safe_load(_read(fragment, variables)) or []
         if isinstance(parsed, dict):
             parsed = parsed.get("updates", [])
         updates.extend(parsed)
@@ -107,7 +122,9 @@ def _codeowners(config: Config) -> DesiredFile | None:
     path = config.templates_dir / BASE_DIR / "CODEOWNERS"
     if not path.exists():
         return None
-    return DesiredFile(CODEOWNERS_PATH, Kind.CODEOWNERS, _read(path, config.vars))
+    return DesiredFile(
+        CODEOWNERS_PATH, Kind.CODEOWNERS, _read(path, _template_vars(config))
+    )
 
 
 def _wf_spec(value) -> tuple[list[str], str, list[str]]:
@@ -142,12 +159,13 @@ def classify_workflow(value, dirs: list[str], private: bool, repo: str) -> str:
 def removable_workflow_paths(
     dirs: list[str], config: Config, private: bool, repo: str, full_name: str
 ) -> list[str]:
+    variables = _template_vars(config)
     paths = []
     for name, value in config.workflows.items():
         if classify_workflow(value, dirs, private, repo) != "removable":
             continue
         src = config.workflows_dir / name
-        if src.is_file() and references_repo(_read(src, config.vars), full_name):
+        if src.is_file() and references_repo(_read(src, variables), full_name):
             continue
         paths.append(f"{WORKFLOWS_PREFIX}/{name}")
     return paths
@@ -163,6 +181,7 @@ def references_repo(content: str, full_name: str) -> bool:
 def _workflows(
     dirs: list[str], config: Config, private: bool, repo: str, full_name: str
 ) -> list[DesiredFile]:
+    variables = _template_vars(config)
     found: dict[str, DesiredFile] = {}
     for filename, value in config.workflows.items():
         if classify_workflow(value, dirs, private, repo) != "desired":
@@ -170,7 +189,7 @@ def _workflows(
         src = config.workflows_dir / filename
         if not src.is_file():
             continue
-        content = _read(src, config.vars)
+        content = _read(src, variables)
         if references_repo(content, full_name):
             continue
         repo_path = f"{WORKFLOWS_PREFIX}/{filename}"
@@ -179,6 +198,7 @@ def _workflows(
 
 
 def _generic_files(dirs: list[str], config: Config) -> list[DesiredFile]:
+    variables = _template_vars(config)
     found: dict[str, DesiredFile] = {}
     for name in [BASE_DIR, ACTIONS_DIR, *dirs]:
         root = config.templates_dir / name / "files"
@@ -189,7 +209,7 @@ def _generic_files(dirs: list[str], config: Config) -> list[DesiredFile]:
                 continue
             repo_path = src.relative_to(root).as_posix()
             found[repo_path] = DesiredFile(
-                repo_path, Kind.FILE, _read(src, config.vars)
+                repo_path, Kind.FILE, _read(src, variables)
             )
     return list(found.values())
 
@@ -197,9 +217,10 @@ def _generic_files(dirs: list[str], config: Config) -> list[DesiredFile]:
 def desired_files(
     dirs: list[str], config: Config, *,
     private: bool = False, repo: str = "", full_name: str = "",
+    has_workflows: bool = True,
 ) -> list[DesiredFile]:
     files: list[DesiredFile] = []
-    dependabot = _dependabot(dirs, config)
+    dependabot = _dependabot(dirs, config, has_workflows=has_workflows)
     if dependabot:
         files.append(dependabot)
     codeowners = _codeowners(config)

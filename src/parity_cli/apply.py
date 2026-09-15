@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 from . import gh, messages
 from .config import Config
-from .model import RepoResult, Status
+from .model import Kind, RepoResult, Status
 
 
 @dataclass
@@ -21,8 +21,17 @@ class ApplyResult:
     error: str | None = None
 
 
-def apply_repo(result: RepoResult, config: Config, *, open_pr: bool = True) -> ApplyResult:
+def apply_repo(
+    result: RepoResult,
+    config: Config,
+    *,
+    open_pr: bool = True,
+    draft: bool | None = None,
+    only: set[Kind] | None = None,
+) -> ApplyResult:
     changes = result.changed
+    if only:
+        changes = [f for f in changes if f.kind in only]
     if not changes:
         return ApplyResult(result.repo, pushed=False, skipped_reason="already in sync")
     if result.error:
@@ -30,6 +39,7 @@ def apply_repo(result: RepoResult, config: Config, *, open_pr: bool = True) -> A
 
     subject, body = messages.build(changes)
     branch = config.branch_name
+    is_draft = config.draft_pr if draft is None else draft
 
     try:
         base_sha = gh.ref_sha(result.full_name, result.default_branch)
@@ -51,7 +61,8 @@ def apply_repo(result: RepoResult, config: Config, *, open_pr: bool = True) -> A
                 pr_url = existing["url"]
             else:
                 pr_url = gh.open_pr(
-                    result.full_name, branch, result.default_branch, subject, body
+                    result.full_name, branch, result.default_branch, subject, body,
+                    draft=is_draft,
                 )
         return ApplyResult(result.repo, pushed=True, pr_url=pr_url, commit=commit[:7])
     except gh.GhError as exc:
@@ -63,13 +74,16 @@ def apply_many(
     config: Config,
     *,
     open_pr: bool = True,
+    draft: bool | None = None,
+    only: set[Kind] | None = None,
     workers: int = 8,
     on_result: Callable[[ApplyResult], None] | None = None,
 ) -> list[ApplyResult]:
     out: list[ApplyResult] = []
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = [
-            pool.submit(apply_repo, r, config, open_pr=open_pr) for r in results
+            pool.submit(apply_repo, r, config, open_pr=open_pr, draft=draft, only=only)
+            for r in results
         ]
         for future in as_completed(futures):
             res = future.result()

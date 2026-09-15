@@ -8,4 +8,4 @@
   cooldown:
     default-days: 7
   commit-message:
-    prefix: deps(uv)
+    prefix: ${uv_commit_prefix}

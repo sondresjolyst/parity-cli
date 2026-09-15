@@ -1,4 +1,7 @@
 owner: sondresjolyst
+# discovery_mode: team
+# teams:
+#   - my-org/platform-team
 templates_dir: templates
 workflows_dir: .github/workflows
 

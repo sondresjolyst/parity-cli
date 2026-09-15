@@ -30,15 +30,15 @@ per repo; the commit message names what changed.
 
 ### TUI keys
 
-| key | action |
-|-----|--------|
-| `r` | rescan |
-| `space` | select/deselect repo |
-| `d` / `enter` | show diff |
-| `o` | open the repo's parity PR |
-| `s` | repo settings drift screen |
-| `a` | apply selected |
-| `q` | quit |
+| key           | action                     |
+| ------------- | -------------------------- |
+| `r`           | rescan                     |
+| `space`       | select/deselect repo       |
+| `d` / `enter` | show diff                  |
+| `o`           | open the repo's parity PR  |
+| `s`           | repo settings drift screen |
+| `a`           | apply selected             |
+| `q`           | quit                       |
 
 ## Layout
 
@@ -55,8 +55,11 @@ templates/
 
 ## Config (`parity.yml`)
 
+Owner mode (default, backward compatible):
+
 ```yaml
 owner: sondresjolyst
+discovery_mode: owner         # optional; default is owner
 templates_dir: templates
 workflows_dir: .github/workflows
 
@@ -87,6 +90,28 @@ vars:
 # language_map:                # override GitHub language -> template dir
 #   TypeScript: node
 ```
+
+Team mode:
+
+```yaml
+discovery_mode: team
+teams:
+  - my-org/platform-team
+  - my-org/reliability
+
+templates_dir: templates
+workflows_dir: .github/workflows
+
+vars:
+  owner: "@my-org/platform-team" # optional override for CODEOWNERS/templates
+```
+
+- `discovery_mode` accepts `owner` or `team`.
+- `owner` is required in owner mode.
+- `teams` is required in team mode and uses `org/team_slug` entries.
+- In team mode, if `vars.owner` is omitted, parity defaults `${owner}` to the
+  first configured team as `@org/team_slug` when rendering templates (including
+  the default `CODEOWNERS` template).
 
 ## Tests
 

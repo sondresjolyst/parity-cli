@@ -19,7 +19,7 @@ from rich.table import Table
 from . import apply as apply_mod
 from . import config as config_mod
 from . import drift, messages
-from .model import Status
+from .model import Kind, Status
 
 app = typer.Typer(
     add_completion=False,
@@ -29,6 +29,21 @@ app = typer.Typer(
 console = Console()
 
 CONFIG_OPT = typer.Option("parity.yml", "--config", "-c", help="Path to config file.")
+
+ONLY_KINDS = [k.value for k in Kind if k is not Kind.FILE]
+
+
+def _parse_only(values: list[str]) -> set[Kind] | None:
+    if not values:
+        return None
+    kinds: set[Kind] = set()
+    for v in values:
+        try:
+            kinds.add(Kind(v))
+        except ValueError:
+            console.print(f"[red]invalid --only value:[/] {v} (choices: {', '.join(ONLY_KINDS)})")
+            raise typer.Exit(1)
+    return kinds
 
 _STATUS_STYLE = {
     Status.MATCH: "green",
@@ -122,15 +137,21 @@ def _summary(results) -> None:
 @app.command()
 def diff(
     repo: str = typer.Argument(..., help="Repo short name."),
+    only: list[str] = typer.Option(
+        None, "--only", "-o", help=f"Limit to file kind(s): {', '.join(ONLY_KINDS)}."
+    ),
     config: Path = CONFIG_OPT,
 ) -> None:
     """Show unified diffs for a single repo."""
     cfg = config_mod.load(config)
-    from . import gh
+    kinds = _parse_only(only)
 
     match = next(
-        (r for r in gh.list_repos(cfg.owner, include_archived=cfg.include_archived,
-                                  include_forks=cfg.include_forks)
+        (r for r in config_mod.discover_repos(
+            cfg,
+            include_archived=cfg.include_archived,
+            include_forks=cfg.include_forks,
+        )
          if r.name == repo),
         None,
     )
@@ -142,11 +163,12 @@ def diff(
     if result.error:
         console.print(f"[red]{result.error}[/]")
         raise typer.Exit(1)
-    if not result.changed:
+    changed = [f for f in result.changed if not kinds or f.kind in kinds]
+    if not changed:
         console.print("[green]in sync[/]")
         return
 
-    for f in result.changed:
+    for f in changed:
         console.rule(f"{f.path} [{_STATUS_STYLE[f.status]}]{f.status.value}[/]")
         current = (f.current or "").splitlines(keepends=True)
         desired = f.desired.splitlines(keepends=True)
@@ -159,21 +181,31 @@ def diff(
 @app.command()
 def apply(
     repo: list[str] = typer.Option(None, "--repo", "-r", help="Limit to repo(s)."),
+    only: list[str] = typer.Option(
+        None, "--only", "-o", help=f"Limit to file kind(s): {', '.join(ONLY_KINDS)}."
+    ),
     no_pr: bool = typer.Option(False, "--no-pr", help="Push branch, skip PR."),
+    draft: bool | None = typer.Option(
+        None, "--draft/--no-draft", help="Open PR(s) as draft (defaults to config draft_pr)."
+    ),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation."),
     config: Path = CONFIG_OPT,
 ) -> None:
     """Create a branch, commit, and open a PR per repo with drift."""
     cfg = config_mod.load(config)
+    kinds = _parse_only(only)
     results = [r for r in _scan(cfg) if r.changed and not r.error]
     if repo:
         results = [r for r in results if r.repo in repo]
+    if kinds:
+        results = [r for r in results if any(f.kind in kinds for f in r.changed)]
     if not results:
         console.print("[green]nothing to do — all in sync[/]")
         return
 
     for r in results:
-        subject, _ = messages.build(r.changed)
+        changes = [f for f in r.changed if not kinds or f.kind in kinds]
+        subject, _ = messages.build(changes)
         console.print(f"  [yellow]{r.repo}[/]: {subject}")
     if not yes and not typer.confirm(f"\nApply to {len(results)} repo(s)?"):
         raise typer.Abort()
@@ -196,7 +228,9 @@ def apply(
                 where = res.pr_url or f"branch {cfg.branch_name}"
                 progress.console.print(f"[green]✓ {res.repo}[/] {res.commit} → {where}")
 
-        apply_mod.apply_many(results, cfg, open_pr=not no_pr, on_result=report)
+        apply_mod.apply_many(
+            results, cfg, open_pr=not no_pr, draft=draft, only=kinds, on_result=report
+        )
 
 
 @app.command()

@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import yaml
 
 from parity_cli import templates
@@ -31,6 +33,34 @@ def test_codeowners_variable_substituted(config):
     files = templates.desired_files([], config)
     codeowners = next(f for f in files if f.kind is Kind.CODEOWNERS)
     assert codeowners.content.strip() == "* @sondresjolyst"
+
+
+def test_team_mode_codeowners_defaults_owner_from_first_team(config):
+    team_config = replace(
+        config,
+        owner="",
+        discovery_mode="team",
+        teams=["my-org/platform-team"],
+        vars={},
+    )
+
+    files = templates.desired_files([], team_config)
+    codeowners = next(f for f in files if f.kind is Kind.CODEOWNERS)
+    assert codeowners.content.strip() == "* @my-org/platform-team"
+
+
+def test_team_mode_codeowners_keeps_explicit_owner_var(config):
+    team_config = replace(
+        config,
+        owner="",
+        discovery_mode="team",
+        teams=["my-org/platform-team"],
+        vars={"owner": "@custom/team"},
+    )
+
+    files = templates.desired_files([], team_config)
+    codeowners = next(f for f in files if f.kind is Kind.CODEOWNERS)
+    assert codeowners.content.strip() == "* @custom/team"
 
 
 def test_workflow_included(config):
