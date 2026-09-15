@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/sondresjolyst/parity-cli/compare/v0.3.4...v0.4.0) (2026-09-15)
+
+
+### Features
+
+* add team-based repo discovery, draft PRs, and file-kind apply filtering ([#36](https://github.com/sondresjolyst/parity-cli/issues/36)) ([5453652](https://github.com/sondresjolyst/parity-cli/commit/5453652ef098df0cc983eb1c2fc0a2dbbaad5da9))
+
 ## [0.3.4](https://github.com/sondresjolyst/parity-cli/compare/v0.3.3...v0.3.4) (2026-09-13)
 
 
