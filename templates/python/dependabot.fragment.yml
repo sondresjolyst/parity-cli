@@ -8,4 +8,4 @@
   cooldown:
     default-days: 7
   commit-message:
-    prefix: deps(pip)
+    prefix: ${pip_commit_prefix}

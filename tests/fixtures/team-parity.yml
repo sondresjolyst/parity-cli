@@ -1,0 +1,3 @@
+discovery_mode: team
+teams:
+  - my-org/platform-team

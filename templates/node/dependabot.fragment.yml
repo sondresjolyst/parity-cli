@@ -37,4 +37,4 @@
   cooldown:
     default-days: 7
   commit-message:
-    prefix: deps(npm)
+    prefix: ${npm_commit_prefix}

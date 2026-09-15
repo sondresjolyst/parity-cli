@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import yaml
 
 from . import gh
-from .config import Config
+from .config import Config, discover_repos
 from .detect import template_dirs
 from .model import DesiredFile, FileResult, Kind, RepoResult, Status
 from .templates import desired_files, load_dependabot, removable_workflow_paths
@@ -78,9 +78,10 @@ def scan_repo(repo: gh.Repo, config: Config) -> RepoResult:
         dirs = template_dirs(langs, config)
         dirs = _resolve_python_tool(repo, dirs)
         result.languages = dirs
+        has_workflows = gh.has_workflow_files(repo.full_name, repo.default_branch)
         desired = desired_files(
             dirs, config, private=repo.private, repo=repo.name,
-            full_name=repo.full_name,
+            full_name=repo.full_name, has_workflows=has_workflows,
         )
         for want in desired:
             current = gh.get_file(repo.full_name, want.path, repo.default_branch)
@@ -116,8 +117,8 @@ def scan(
     on_start: Callable[[int], None] | None = None,
     on_progress: Callable[[], None] | None = None,
 ) -> list[RepoResult]:
-    repos = gh.list_repos(
-        config.owner,
+    repos = discover_repos(
+        config,
         include_archived=config.include_archived,
         include_forks=config.include_forks,
     )

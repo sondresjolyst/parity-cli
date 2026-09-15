@@ -77,6 +77,20 @@ class Repo:
     private: bool
 
 
+def list_user_teams() -> list[tuple[str, str]]:
+    """List (org_login, team_slug) pairs for the authenticated user."""
+    raw = api("/user/teams", paginate=True) or []
+    teams: list[tuple[str, str]] = []
+    for item in raw:
+        org = item.get("organization") or {}
+        login = org.get("login")
+        slug = item.get("slug")
+        if not login or not slug:
+            continue
+        teams.append((str(login), str(slug)))
+    return sorted(teams)
+
+
 def list_repos(owner: str, *, include_archived: bool = False,
                include_forks: bool = False) -> list[Repo]:
     """List repos for a user or org."""
@@ -103,6 +117,83 @@ def list_repos(owner: str, *, include_archived: bool = False,
     return sorted(repos, key=lambda r: r.name.lower())
 
 
+# GitHub permission hierarchy, lowest to highest. A repo satisfies a given
+# minimum permission if any equal-or-higher level in this list is truthy.
+PERMISSION_LEVELS = ["pull", "triage", "push", "maintain", "admin"]
+
+
+def _meets_min_permission(permissions: dict[str, object], minimum: str) -> bool:
+    if minimum not in PERMISSION_LEVELS:
+        raise ValueError(
+            f"Unsupported team permission {minimum!r}; expected one of "
+            f"{PERMISSION_LEVELS}"
+        )
+    threshold = PERMISSION_LEVELS.index(minimum)
+    return any(
+        permissions.get(level) for level in PERMISSION_LEVELS[threshold:]
+    )
+
+
+def list_team_repos(
+    org: str,
+    team_slug: str,
+    *,
+    min_permission: str = "push",
+    include_archived: bool = False,
+    include_forks: bool = False,
+) -> list[Repo]:
+    """List repos the team has at least `min_permission` on.
+
+    "push" (default) is enough to apply file drift; "admin" is required
+    for `parity settings --apply`.
+    """
+    raw = api(f"/orgs/{org}/teams/{team_slug}/repos", paginate=True) or []
+    repos: list[Repo] = []
+    for item in raw:
+        if not _meets_min_permission(item.get("permissions") or {}, min_permission):
+            continue
+        if item.get("archived") and not include_archived:
+            continue
+        if item.get("fork") and not include_forks:
+            continue
+        repos.append(
+            Repo(
+                name=item["name"],
+                full_name=item["full_name"],
+                default_branch=item.get("default_branch") or "main",
+                archived=bool(item.get("archived")),
+                fork=bool(item.get("fork")),
+                private=bool(item.get("private")),
+            )
+        )
+    return sorted(repos, key=lambda r: r.name.lower())
+
+
+def list_repos_for_teams(
+    teams: list[str],
+    *,
+    min_permission: str = "push",
+    include_archived: bool = False,
+    include_forks: bool = False,
+) -> list[Repo]:
+    repos_by_full_name: dict[str, Repo] = {}
+    for team in teams:
+        org, sep, team_slug = team.partition("/")
+        if not sep or not org or not team_slug:
+            raise ValueError(
+                f"Invalid team {team!r}; expected 'org/team_slug' in parity.yml"
+            )
+        for repo in list_team_repos(
+            org,
+            team_slug,
+            min_permission=min_permission,
+            include_archived=include_archived,
+            include_forks=include_forks,
+        ):
+            repos_by_full_name[repo.full_name] = repo
+    return sorted(repos_by_full_name.values(), key=lambda r: r.name.lower())
+
+
 def languages(full_name: str) -> dict[str, int]:
     """Return {language: bytes} for a repo."""
     result = api(f"repos/{full_name}/languages")
@@ -123,6 +214,20 @@ def get_file(full_name: str, path: str, ref: str | None = None) -> str | None:
     if data.get("encoding") != "base64":
         return None
     return base64.b64decode(data["content"]).decode("utf-8")
+
+
+def has_workflow_files(full_name: str, ref: str | None = None) -> bool:
+    """True if the repo has at least one file under .github/workflows."""
+    url = f"repos/{full_name}/contents/.github/workflows"
+    if ref:
+        url += f"?ref={ref}"
+    proc = _run(["api", url], check=False)
+    if proc.returncode != 0:
+        if "Not Found" in proc.stderr or "404" in proc.stderr:
+            return False
+        raise GhError(proc.stderr.strip())
+    data = json.loads(proc.stdout)
+    return isinstance(data, list) and any(item.get("type") == "file" for item in data)
 
 
 def _api_json(path: str, method: str, body: dict) -> dict:
@@ -195,11 +300,13 @@ def upsert_branch(full_name: str, branch: str, commit_sha: str) -> None:
         )
 
 
-def open_pr(full_name: str, head: str, base: str, title: str, body: str) -> str:
+def open_pr(
+    full_name: str, head: str, base: str, title: str, body: str, *, draft: bool = False
+) -> str:
     data = _api_json(
         f"repos/{full_name}/pulls",
         "POST",
-        {"title": title, "head": head, "base": base, "body": body},
+        {"title": title, "head": head, "base": base, "body": body, "draft": draft},
     )
     return str(data["html_url"])
 

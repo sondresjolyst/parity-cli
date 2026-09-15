@@ -8,4 +8,4 @@
   cooldown:
     default-days: 7
   commit-message:
-    prefix: deps(nuget)
+    prefix: ${nuget_commit_prefix}
