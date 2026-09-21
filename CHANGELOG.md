@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/sondresjolyst/parity-cli/compare/v0.5.0...v0.6.0) (2026-09-21)
+
+
+### Features
+
+* **templates:** group aspnetcore/efcore dependabot updates ([#42](https://github.com/sondresjolyst/parity-cli/issues/42)) ([d201aaa](https://github.com/sondresjolyst/parity-cli/commit/d201aaa7ecf0f6ea1e79ce72d7715fe6a9230bfb))
+
 ## [0.5.0](https://github.com/sondresjolyst/parity-cli/compare/v0.4.0...v0.5.0) (2026-09-21)
 
 
