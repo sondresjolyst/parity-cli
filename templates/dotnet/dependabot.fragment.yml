@@ -1,5 +1,10 @@
 - package-ecosystem: nuget
   directory: /
+  groups:
+    skiasharp:
+      patterns:
+        - SkiaSharp
+        - SkiaSharp.*
   schedule:
     interval: weekly
     day: sunday
