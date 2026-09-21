@@ -1,6 +1,10 @@
 - package-ecosystem: nuget
   directory: /
   groups:
+    aspnetcore:
+      patterns:
+        - Microsoft.AspNetCore.*
+        - Microsoft.EntityFrameworkCore*
     skiasharp:
       patterns:
         - SkiaSharp
