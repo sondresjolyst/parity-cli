@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0](https://github.com/sondresjolyst/parity-cli/compare/v0.4.0...v0.5.0) (2026-09-21)
+
+
+### Features
+
+* **templates:** add expo/react-native and skiasharp dependabot groups ([#40](https://github.com/sondresjolyst/parity-cli/issues/40)) ([1b2c399](https://github.com/sondresjolyst/parity-cli/commit/1b2c399ea37b4a751502b3359b2f0d2c852ef7ab))
+
+
+### Dependencies
+
+* **uv:** bump `uv-build` from 0.12.10 to 0.12.13 ([#39](https://github.com/sondresjolyst/parity-cli/issues/39)) ([2ca3575](https://github.com/sondresjolyst/parity-cli/commit/2ca35758732cb06dd5d83487371c50ca7a46ab44))
+
 ## [0.4.0](https://github.com/sondresjolyst/parity-cli/compare/v0.3.4...v0.4.0) (2026-09-15)
 
 
