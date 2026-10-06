@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 from . import gh, messages
 from .config import Config
-from .model import Kind, RepoResult, Status
+from .model import FileResult, Kind, RepoResult, Status
 
 
 @dataclass
@@ -66,7 +66,25 @@ def apply_repo(
                 )
         return ApplyResult(result.repo, pushed=True, pr_url=pr_url, commit=commit[:7])
     except gh.GhError as exc:
-        return ApplyResult(result.repo, pushed=False, error=str(exc))
+        return ApplyResult(result.repo, pushed=False, error=_explain(str(exc), changes))
+
+
+WORKFLOW_SCOPE_HINT = (
+    "token lacks the `workflow` scope needed to change .github/workflows. "
+    "Run `gh auth refresh -h github.com -s workflow`"
+)
+
+
+def _explain(error: str, changes: list[FileResult]) -> str:
+    """Add a hint to GitHub's bare 404 when the workflow scope is missing."""
+    if "Not Found" not in error and "404" not in error:
+        return error
+    if not any(f.path.startswith(".github/workflows/") for f in changes):
+        return error
+    scopes = gh.token_scopes()
+    if scopes is None or "workflow" in scopes:
+        return error
+    return f"{error}: {WORKFLOW_SCOPE_HINT}"
 
 
 def apply_many(

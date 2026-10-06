@@ -67,6 +67,27 @@ def current_login() -> str:
     return str(api("user")["login"])  # type: ignore[index]
 
 
+def token_scopes() -> set[str] | None:
+    """Return the OAuth scopes of the active token, or None if unknown.
+
+    Fine-grained and app tokens send no X-OAuth-Scopes header, so they yield None.
+    """
+    proc = _run(["api", "-i", "user"], check=False)
+    if proc.returncode != 0:
+        return None
+    return _parse_scopes(proc.stdout)
+
+
+def _parse_scopes(response: str) -> set[str] | None:
+    for line in response.splitlines():
+        if not line.strip():
+            break
+        name, sep, value = line.partition(":")
+        if sep and name.strip().lower() == "x-oauth-scopes":
+            return {s.strip() for s in value.split(",") if s.strip()}
+    return None
+
+
 @dataclass(frozen=True)
 class Repo:
     name: str
