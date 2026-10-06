@@ -84,6 +84,24 @@ def test_list_team_repos_filters_repo_flags(monkeypatch):
     ]
 
 
+def test_parse_scopes_reads_oauth_header():
+    response = (
+        "HTTP/2.0 200 OK\r\n"
+        "Content-Type: application/json\r\n"
+        "X-Oauth-Scopes: gist, read:org, repo\r\n"
+        "\r\n"
+        '{"login": "me"}'
+    )
+
+    assert gh._parse_scopes(response) == {"gist", "read:org", "repo"}
+
+
+def test_parse_scopes_none_without_header():
+    response = 'HTTP/2.0 200 OK\r\nContent-Type: application/json\r\n\r\n{"x-oauth-scopes": 1}'
+
+    assert gh._parse_scopes(response) is None
+
+
 def test_list_repos_for_teams_dedups_and_sorts(monkeypatch):
     team_repos = {
         "my-org/platform": [
