@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.7.0](https://github.com/sondresjolyst/parity-cli/compare/v0.6.2...v0.7.0) (2026-10-06)
+
+
+### Features
+
+* **templates:** add new patterns ([2907af3](https://github.com/sondresjolyst/parity-cli/commit/2907af348ca6ba28ed5c36eb0b5dd605a4a5487d))
+
+
+### Bug Fixes
+
+* **apply:** explain missing workflow scope on 404 ([#50](https://github.com/sondresjolyst/parity-cli/issues/50)) ([091322d](https://github.com/sondresjolyst/parity-cli/commit/091322db94d0ab82a679628330b1f606bf13b12b))
+
 ## [0.6.2](https://github.com/sondresjolyst/parity-cli/compare/v0.6.1...v0.6.2) (2026-10-04)
 
 
