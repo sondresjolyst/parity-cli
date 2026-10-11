@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/sondresjolyst/parity-cli/compare/v0.7.0...v0.7.1) (2026-10-11)
+
+
+### Dependencies
+
+* **uv:** bump `uv-build` from 0.12.19 to 0.12.23 ([#51](https://github.com/sondresjolyst/parity-cli/issues/51)) ([9eb12e6](https://github.com/sondresjolyst/parity-cli/commit/9eb12e60d12068e65277861da8694f0f993f6890))
+
 ## [0.7.0](https://github.com/sondresjolyst/parity-cli/compare/v0.6.2...v0.7.0) (2026-10-06)
 
 
