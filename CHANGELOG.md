@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.8.0](https://github.com/sondresjolyst/parity-cli/compare/v0.7.0...v0.8.0) (2026-10-18)
+
+
+### Features
+
+* add more grouping to dotnet ([f9dcad8](https://github.com/sondresjolyst/parity-cli/commit/f9dcad8cbd3e3b18e0d99ea7d19f9c99afe45861))
+
+
+### Dependencies
+
+* **uv:** bump `typer` from 0.27.2 to 0.27.3 ([#53](https://github.com/sondresjolyst/parity-cli/issues/53)) ([87d9664](https://github.com/sondresjolyst/parity-cli/commit/87d9664f6fe3eb80e3ab61cc2955d449b264f241))
+* **uv:** bump `uv-build` from 0.12.19 to 0.12.23 ([#51](https://github.com/sondresjolyst/parity-cli/issues/51)) ([9eb12e6](https://github.com/sondresjolyst/parity-cli/commit/9eb12e60d12068e65277861da8694f0f993f6890))
+* **uv:** bump `uv-build` from 0.12.23 to 0.13.0 ([#54](https://github.com/sondresjolyst/parity-cli/issues/54)) ([6e93dc5](https://github.com/sondresjolyst/parity-cli/commit/6e93dc5a734ec0166403bb77ea9ba0e5c6c14593))
+
 ## [0.7.0](https://github.com/sondresjolyst/parity-cli/compare/v0.6.2...v0.7.0) (2026-10-06)
 
 

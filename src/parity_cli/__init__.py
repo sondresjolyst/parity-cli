@@ -1,3 +1,3 @@
 """parity-cli: see and fix drift in dependabot.yml, CODEOWNERS and shared workflows."""
 
-__version__ = "0.7.0"
+__version__ = "0.8.0"
