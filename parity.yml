@@ -27,6 +27,7 @@ workflows:
   release-review.yml:
     languages: [all]
     manager: renovate
+    exclude: [parity-cli]   # source of the workflow, its copy here stays
 
 settings:
   delete_branch_on_merge: true

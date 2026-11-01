@@ -138,6 +138,22 @@ def _renovate(config: Config) -> DesiredFile:
     return DesiredFile(RENOVATE_PATH, Kind.RENOVATE, json.dumps(doc, indent=2) + "\n")
 
 
+def _config_lines(text: str) -> list[str]:
+    return [line.strip() for line in text.splitlines() if line.strip()]
+
+
+def npmrc_has_settings(desired: str, current: str) -> bool:
+    """True if a repo's .npmrc has every managed line. Its other lines are its own."""
+    return set(_config_lines(desired)) <= set(_config_lines(current))
+
+
+def merge_npmrc(desired: str, current: str) -> str:
+    """Add the missing managed lines to a repo's .npmrc and keep everything else."""
+    have = set(_config_lines(current))
+    missing = [line for line in _config_lines(desired) if line not in have]
+    return current.rstrip("\n") + "\n" + "\n".join(missing) + "\n"
+
+
 def _renovate_doc(current: str) -> dict:
     try:
         doc = json.loads(current)

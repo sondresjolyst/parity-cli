@@ -235,3 +235,22 @@ def test_release_review_workflow_only_on_renovate_repos(config):
     assert 'gh pr edit "$number" --add-reviewer "$GITHUB_REPOSITORY_OWNER"' in wanted.content
     assert "${{ github.token }}" in wanted.content
     assert not any(f.path == path for f in templates.desired_files([], stay, repo="r"))
+
+
+def test_release_review_workflow_stays_in_its_source_repo(config):
+    moved = replace(config, dependency_manager="dependabot", dependency_manager_repos={})
+    assert ".github/workflows/release-review.yml" not in templates.removable_workflow_paths(
+        [], moved, False, "parity-cli", "o/parity-cli"
+    )
+
+
+def test_release_review_workflow_is_valid_yaml(config):
+    moved = _renovate(config, dependency_manager_repos={})
+    wanted = next(
+        f for f in templates.desired_files([], moved, repo="r")
+        if f.path == ".github/workflows/release-review.yml"
+    )
+    doc = yaml.safe_load(wanted.content)
+    run = doc["jobs"]["request"]["steps"][0]["run"]
+    assert "set -euo pipefail" in run
+    assert ".reviews | length" in run

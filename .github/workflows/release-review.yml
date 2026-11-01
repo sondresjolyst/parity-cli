@@ -20,7 +20,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          gh pr list --author app/github-actions --search "chore: release in:title" --json number --jq '.[].number' |
-            while read -r number; do
-              gh pr edit "$number" --add-reviewer "$GITHUB_REPOSITORY_OWNER"
-            done
+          set -euo pipefail
+          if [ "$(gh api "users/$GITHUB_REPOSITORY_OWNER" --jq .type)" != "User" ]; then
+            echo "Owner is not a user, skipping"
+            exit 0
+          fi
+          numbers=$(gh pr list --author app/github-actions --search "chore: release in:title" \
+            --json number,reviews,reviewRequests \
+            --jq '.[] | select((.reviews | length) == 0 and (.reviewRequests | length) == 0) | .number')
+          echo "Release PRs needing a review request: ${numbers:-none}"
+          for number in $numbers; do
+            gh pr edit "$number" --add-reviewer "$GITHUB_REPOSITORY_OWNER"
+          done

@@ -236,3 +236,31 @@ def test_scan_leaves_renovate_json_alone_on_a_dependabot_repo(config, monkeypatc
     )
     result = drift.scan_repo(_REPO, stay)
     assert not any(f.path == "renovate.json" for f in result.files)
+
+
+_NPMRC = "min-release-age=7\nmin-release-age-exclude=@acme/*\n"
+
+
+def _npmrc_result(current):
+    return drift._compare(DesiredFile(".npmrc", Kind.FILE, _NPMRC), current)
+
+
+def test_npmrc_with_managed_lines_and_its_own_matches():
+    current = "registry=https://example.test\n" + _NPMRC
+    assert _npmrc_result(current).status is Status.MATCH
+
+
+def test_npmrc_keeps_existing_lines_when_adding_managed_ones():
+    result = _npmrc_result("@acme:registry=https://example.test\nmin-release-age=7\n")
+    assert result.status is Status.DRIFT
+    assert result.desired == (
+        "@acme:registry=https://example.test\n"
+        "min-release-age=7\n"
+        "min-release-age-exclude=@acme/*\n"
+    )
+
+
+def test_missing_npmrc_gets_the_template():
+    result = _npmrc_result(None)
+    assert result.status is Status.MISSING
+    assert result.desired == _NPMRC
