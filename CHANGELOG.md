@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.9.0](https://github.com/sondresjolyst/parity-cli/compare/v0.8.1...v0.9.0) (2026-11-01)
+
+
+### Features
+
+* add release age npmrc and release review workflow ([#65](https://github.com/sondresjolyst/parity-cli/issues/65)) ([30271e3](https://github.com/sondresjolyst/parity-cli/commit/30271e3d6a16cd6e14b85fc5161675d605143df1))
+* support Renovate alongside Dependabot ([#62](https://github.com/sondresjolyst/parity-cli/issues/62)) ([b1d8b8d](https://github.com/sondresjolyst/parity-cli/commit/b1d8b8d37c0ad07825d5269894acd3792ee3bf42))
+
+
+### Bug Fixes
+
+* keep repo rules when adding the Renovate preset ([#64](https://github.com/sondresjolyst/parity-cli/issues/64)) ([04b786e](https://github.com/sondresjolyst/parity-cli/commit/04b786e3ad1a1d233702a03edc17d5ac5dd97cd5))
+
 ## [0.8.1](https://github.com/sondresjolyst/parity-cli/compare/v0.8.0...v0.8.1) (2026-10-25)
 
 
