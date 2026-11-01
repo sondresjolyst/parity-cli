@@ -1,0 +1,14 @@
+name: Format Dependabot PR titles
+
+on:
+  pull_request_target:
+    types: [opened, reopened, edited, synchronize]
+
+permissions: {}
+
+jobs:
+  rewrite:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    permissions:
+      pull-requests: write
+    uses: my-org/shared-workflows/.github/workflows/dependabot-title.yml@main

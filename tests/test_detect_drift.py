@@ -184,9 +184,9 @@ def test_scan_reports_renovate_config_in_another_location(config, monkeypatch):
 
 
 def test_scan_warns_about_unknown_override_repos(config, monkeypatch):
-    typo = replace(config, dependency_manager_repos={"nstuning_app": "renovate"})
+    typo = replace(config, dependency_manager_repos={"my_repo": "renovate"})
     monkeypatch.setattr(drift, "discover_repos", lambda *a, **k: [])
-    with pytest.warns(UserWarning, match="nstuning_app"):
+    with pytest.warns(UserWarning, match="my_repo"):
         drift.scan(typo)
 
 

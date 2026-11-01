@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 import difflib
 from pathlib import Path
 
@@ -26,6 +27,15 @@ app = typer.Typer(
     help="See and fix drift in dependabot.yml, renovate.json, CODEOWNERS and shared workflows.",
     no_args_is_help=True,
 )
+
+def _use_utf8_output(*streams) -> None:
+    """Windows pipes default to a code page that cannot print the status marks."""
+    for stream in streams:
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
+
+_use_utf8_output(sys.stdout, sys.stderr)
 console = Console()
 
 CONFIG_OPT = typer.Option("parity.yml", "--config", "-c", help="Path to config file.")
@@ -128,8 +138,10 @@ def _cell(statuses: list[Status]) -> str:
 
 def _summary(results) -> None:
     drifted = [r for r in results if r.changed and not r.error]
+    failed = [r for r in results if r.error]
+    errors = f", [red]{len(failed)}[/] failed" if failed else ""
     console.print(
-        f"\n{len(results)} repos, [yellow]{len(drifted)}[/] with drift. "
+        f"\n{len(results)} repos, [yellow]{len(drifted)}[/] with drift{errors}. "
         "Run [bold]parity diff <repo>[/] or [bold]parity apply[/]."
     )
 

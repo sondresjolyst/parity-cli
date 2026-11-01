@@ -3,13 +3,15 @@
 See and fix drift in `dependabot.yml`, `renovate.json`, `CODEOWNERS` and shared
 workflows across all your GitHub repos.
 
-This repo is the config: `parity.yml`, `templates/` and `.github/` define what
-every managed repo should look like. Edit those, then run the commands below.
+Your config lives in its own directory or repo: `parity.yml`, `templates/` and
+`workflows/` define what every managed repo should look like. Start from
+[`examples/`](examples), then run the commands below from your config directory.
 
 ## Install
 
 ```sh
 uv sync --native-tls
+cp -r examples ../my-parity-config
 ```
 
 ## Usage
@@ -43,14 +45,14 @@ per repo; the commit message names what changed.
 ## Layout
 
 ```text
-parity.yml                     # config
+parity.yml                     # config, pass another path with --config
 templates/
   _base/CODEOWNERS
   _actions/dependabot.fragment.yml
   python/ node/ dotnet/ docker/ uv/
     dependabot.fragment.yml
     files/**                   # optional extra files, mapped to repo paths
-.github/workflows/             # workflow templates
+workflows/                     # workflow templates
 ```
 
 ## Config (`parity.yml`)
@@ -58,10 +60,10 @@ templates/
 Owner mode (default, backward compatible):
 
 ```yaml
-owner: sondresjolyst
+owner: my-org
 discovery_mode: owner         # optional; default is owner
 templates_dir: templates
-workflows_dir: .github/workflows
+workflows_dir: workflows
 
 language_threshold: 0.10       # ignore languages below this share of the repo
 include_archived: false
@@ -83,7 +85,7 @@ settings:                      # managed repo settings (parity settings)
   dependabot_security_updates: true
 
 vars:
-  owner: "@sondresjolyst"
+  owner: "@my-org/platform-team"
 
 # repos_include: []            # only these repos (empty = all)
 # repos_exclude: []
@@ -100,7 +102,7 @@ teams:
   - my-org/reliability
 
 templates_dir: templates
-workflows_dir: .github/workflows
+workflows_dir: workflows
 
 vars:
   owner: "@my-org/platform-team" # optional override for CODEOWNERS/templates
