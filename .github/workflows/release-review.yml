@@ -1,0 +1,26 @@
+name: Request release review
+
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  request:
+    name: Request review
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Request review on the open release PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh pr list --author app/github-actions --search "chore: release in:title" --json number --jq '.[].number' |
+            while read -r number; do
+              gh pr edit "$number" --add-reviewer "$GITHUB_REPOSITORY_OWNER"
+            done

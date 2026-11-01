@@ -133,6 +133,8 @@ workflows:
 
 - A Renovate repo gets a `renovate.json` that extends the preset. `apply` removes
   its `dependabot.yml`.
+- `release-review.yml` requests review on release PRs. Set it to `manager: renovate`
+  when CODEOWNERS is removed, as nothing else asks for that review then.
 - Install the Renovate app on a repo before `apply` removes its `dependabot.yml`.
 - A `renovate.json` matches as long as it extends the preset, so a repo can add
   its own rules. If the preset is missing, `apply` adds it and keeps the rest.

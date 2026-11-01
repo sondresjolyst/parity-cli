@@ -24,6 +24,9 @@ workflows:
   dependabot-title.yml:
     languages: [all]
     manager: dependabot
+  release-review.yml:
+    languages: [all]
+    manager: renovate
 
 settings:
   delete_branch_on_merge: true

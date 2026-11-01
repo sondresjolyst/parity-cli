@@ -216,3 +216,22 @@ def test_dependabot_title_workflow_follows_the_manager(config):
     assert title in templates.removable_workflow_paths(
         ["node"], renovate, False, "r", "o/r"
     )
+
+
+def test_node_repo_gets_release_age_npmrc(config):
+    files = templates.desired_files(["node"], config, repo="r")
+    npmrc = next(f for f in files if f.path == ".npmrc")
+    assert "min-release-age=7" in npmrc.content
+    assert not any(
+        f.path == ".npmrc" for f in templates.desired_files(["python"], config, repo="r")
+    )
+
+
+def test_release_review_workflow_only_on_renovate_repos(config):
+    path = ".github/workflows/release-review.yml"
+    moved = _renovate(config, dependency_manager_repos={})
+    stay = replace(config, dependency_manager="dependabot", dependency_manager_repos={})
+    wanted = next(f for f in templates.desired_files([], moved, repo="r") if f.path == path)
+    assert 'gh pr edit "$number" --add-reviewer "$GITHUB_REPOSITORY_OWNER"' in wanted.content
+    assert "${{ github.token }}" in wanted.content
+    assert not any(f.path == path for f in templates.desired_files([], stay, repo="r"))
