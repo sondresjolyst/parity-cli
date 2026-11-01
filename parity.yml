@@ -14,6 +14,9 @@ branch_name: parity/sync-standards
 dependency_manager: dependabot
 dependency_manager_repos:
   nstuning-app: renovate
+  nstuning-api: renovate
+  pyttogpanne-app: renovate
+  altinnendata-app: renovate
 renovate_preset: github>sondresjolyst/si-renovate-config
 renovate_remove_codeowners: true
 
