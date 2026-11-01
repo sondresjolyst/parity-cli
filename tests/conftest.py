@@ -10,4 +10,4 @@ ROOT = Path(__file__).parents[1]
 
 @pytest.fixture
 def config() -> Config:
-    return config_mod.load(ROOT / "parity.yml")
+    return config_mod.load(ROOT / "tests/fixtures/parity.yml")

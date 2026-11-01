@@ -1,11 +1,7 @@
 import json
-import os
-import shutil
-import subprocess
 from pathlib import Path
 from dataclasses import replace
 
-import pytest
 import yaml
 
 from parity_cli import templates
@@ -38,7 +34,7 @@ def test_dependabot_carries_house_settings(config):
 def test_codeowners_variable_substituted(config):
     files = templates.desired_files([], config)
     codeowners = next(f for f in files if f.kind is Kind.CODEOWNERS)
-    assert codeowners.content.strip() == "* @sondresjolyst"
+    assert codeowners.content.strip() == "* @tester"
 
 
 def test_team_mode_codeowners_defaults_owner_from_first_team(config):
@@ -88,9 +84,9 @@ def test_private_repo_skips_dependency_review_keeps_others(config):
 
 def test_self_reference_workflow_skipped_in_host_repo(config):
     host = {f.path for f in templates.desired_files(
-        [], config, full_name="sondresjolyst/garge")}
+        [], config, full_name="my-org/shared-workflows")}
     other = {f.path for f in templates.desired_files(
-        [], config, full_name="sondresjolyst/garge-app")}
+        [], config, full_name="my-org/shared-workflows-2")}
     assert ".github/workflows/dependabot-title.yml" not in host
     assert ".github/workflows/dependabot-title.yml" in other
 
@@ -242,13 +238,6 @@ def test_release_review_workflow_only_on_renovate_repos(config):
     assert not any(f.path == path for f in templates.desired_files([], stay, repo="r"))
 
 
-def test_release_review_workflow_stays_in_its_source_repo(config):
-    moved = replace(config, dependency_manager="dependabot", dependency_manager_repos={})
-    assert ".github/workflows/release-review.yml" not in templates.removable_workflow_paths(
-        [], moved, False, "parity-cli", "o/parity-cli"
-    )
-
-
 def test_release_review_workflow_is_valid_yaml(config):
     moved = _renovate(config, dependency_manager_repos={})
     wanted = next(
@@ -298,35 +287,8 @@ def test_repo_vars_override_release_reviewers_for_that_repo_only(config):
     assert other == "a"
 
 
-def _review_script():
-    source = Path(__file__).parents[1] / ".github/workflows/release-review.yml"
-    job = yaml.safe_load(source.read_text(encoding="utf-8"))["jobs"]["request"]
-    run = job["steps"][0]["run"]
-    return run[: run.index('numbers=$(')] + 'echo "continue"\n'
-
-
-@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
-@pytest.mark.parametrize(
-    ("reviewers", "continues"),
-    [
-        ("${release_reviewers}", False),
-        ("sondresjolyst", True),
-        ("a-b_c,my-org/team", True),
-    ],
-)
-def test_review_script_skips_only_the_unfilled_source(reviewers, continues):
-    result = subprocess.run(
-        ["bash", "-c", _review_script()],
-        env={**os.environ, "REVIEWERS": reviewers},
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    assert ("continue" in result.stdout) is continues
-
-
 def test_review_query_matches_the_branch_not_the_title():
-    source = Path(__file__).parents[1] / ".github/workflows/release-review.yml"
+    source = Path(__file__).parents[1] / "examples/workflows/release-review.yml"
     run = yaml.safe_load(source.read_text(encoding="utf-8"))["jobs"]["request"]["steps"][0]["run"]
     assert 'startswith("release-please--")' in run
     assert "in:title" not in run

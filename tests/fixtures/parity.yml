@@ -1,9 +1,9 @@
-owner: sondresjolyst
+owner: tester
 # discovery_mode: team
 # teams:
 #   - my-org/platform-team
-templates_dir: templates
-workflows_dir: .github/workflows
+templates_dir: ../../examples/templates
+workflows_dir: ../../examples/workflows
 
 language_threshold: 0.10
 include_archived: false
@@ -12,10 +12,10 @@ include_forks: false
 branch_name: parity/sync-standards
 
 dependency_manager: dependabot
-dependency_manager_repos:
-  nstuning-app: renovate
-renovate_preset: github>sondresjolyst/si-renovate-config
-renovate_remove_codeowners: true
+# dependency_manager_repos:      # per-repo override, either direction
+#   my-repo: renovate
+# renovate_preset: github>my-org/renovate-config
+# renovate_remove_codeowners: false
 
 workflows:
   dependency-review.yml:
@@ -27,7 +27,6 @@ workflows:
   release-review.yml:
     languages: [all]
     manager: renovate
-    exclude: [parity-cli]   # source of the workflow, its copy here stays
 
 settings:
   delete_branch_on_merge: true
@@ -41,12 +40,12 @@ settings:
   dependabot_security_updates: true
 
 vars:
-  owner: "@sondresjolyst"
-  release_reviewers: sondresjolyst   # comma separated users or org/team slugs
+  owner: "@tester"
+  # release_reviewers: someone,my-org/platform-team   # defaults to owner
 
 # repo_vars:           # per-repo overrides of vars
 #   my-repo:
-#     release_reviewers: someone,my-org/my-team
+#     release_reviewers: someone-else
 
 # repos_include: []   # only these repos (empty = all)
 # repos_exclude: []   # skip these repos

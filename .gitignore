@@ -9,5 +9,6 @@ wheels/
 # Virtual environments
 .venv
 
-# User/team-specific parity configs (parity.yml itself stays tracked)
+# User/team-specific parity configs
+/parity.yml
 parity-*.yml

@@ -22,13 +22,6 @@ jobs:
           REVIEWERS: ${release_reviewers}
         run: |
           set -euo pipefail
-          # parity fills in REVIEWERS. The unfilled source copy has nobody to ask.
-          case "$REVIEWERS" in
-            *[!a-zA-Z0-9,/_-]*)
-              echo "No reviewers configured, skipping"
-              exit 0
-              ;;
-          esac
           # Matches on the branch, as release PR titles differ between repos.
           numbers=$(gh pr list --limit 200 --json number,headRefName,reviews,reviewRequests \
             --jq '.[] | select(.headRefName | startswith("release-please--"))

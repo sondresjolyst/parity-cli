@@ -32,7 +32,7 @@ class Config:
     workflows: dict[str, list[str]] = field(default_factory=dict)
     # managed repo settings key -> desired value
     settings: dict[str, object] = field(default_factory=dict)
-    # placeholders substituted into templates, e.g. {"owner": "@sondresjolyst"}
+    # placeholders substituted into templates, e.g. {"owner": "@my-org/my-team"}
     vars: dict[str, str] = field(default_factory=dict)
     # repo name -> vars that override the ones above for that repo
     repo_vars: dict[str, dict[str, str]] = field(default_factory=dict)
