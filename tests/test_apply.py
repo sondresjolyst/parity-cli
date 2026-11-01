@@ -1,5 +1,5 @@
 from parity_cli import apply, gh
-from parity_cli.model import FileResult, Kind, Status
+from parity_cli.model import FileResult, Kind, RepoResult, Status
 
 WORKFLOW = FileResult(".github/workflows/ci.yml", Kind.WORKFLOW, Status.DRIFT, "", "")
 DEPENDABOT = FileResult(".github/dependabot.yml", Kind.DEPENDABOT, Status.DRIFT, "", "")
@@ -44,3 +44,22 @@ def test_explain_skips_scope_check_without_workflow_changes(monkeypatch):
     assert apply._explain("gh: Bad credentials (HTTP 401)", [WORKFLOW]) == (
         "gh: Bad credentials (HTTP 401)"
     )
+
+
+def test_only_renovate_moves_the_repo_as_one_unit(config, monkeypatch):
+    trees = []
+    monkeypatch.setattr(gh, "ref_sha", lambda *a, **k: "base")
+    monkeypatch.setattr(gh, "commit_tree_sha", lambda *a, **k: "tree")
+    monkeypatch.setattr(
+        gh, "create_tree", lambda _r, _b, writes, deletes: trees.append((writes, deletes)) or "new"
+    )
+    monkeypatch.setattr(gh, "create_commit", lambda *a, **k: "commit1")
+    monkeypatch.setattr(gh, "upsert_branch", lambda *a, **k: None)
+    result = RepoResult("r", "o/r", "main", [], files=[
+        FileResult("renovate.json", Kind.RENOVATE, Status.MISSING, "{}", None),
+        FileResult(".github/dependabot.yml", Kind.RENOVATE, Status.EXTRA, "", "x"),
+        FileResult(".github/CODEOWNERS", Kind.CODEOWNERS, Status.EXTRA, "", "x"),
+    ])
+    out = apply.apply_repo(result, config, open_pr=False, only={Kind.RENOVATE})
+    assert out.pushed
+    assert trees == [([("renovate.json", "{}")], [".github/dependabot.yml"])]

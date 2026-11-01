@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import warnings
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -13,8 +14,10 @@ from .config import Config, discover_repos
 from .detect import template_dirs
 from .model import DesiredFile, FileResult, Kind, RepoResult, Status
 from .templates import (
+    RENOVATE_ALT_PATHS,
     desired_files,
     load_dependabot,
+    merge_renovate,
     removable_manager_files,
     removable_workflow_paths,
     renovate_extends_preset,
@@ -62,7 +65,10 @@ def _compare(desired: DesiredFile, current: str | None) -> FileResult:
         status = Status.MATCH
     else:
         status = Status.DRIFT
-    return FileResult(desired.path, desired.kind, status, desired.content, current)
+    content = desired.content
+    if status is Status.DRIFT and desired.kind is Kind.RENOVATE:
+        content = merge_renovate(desired.content, current)
+    return FileResult(desired.path, desired.kind, status, content, current)
 
 
 def _resolve_python_tool(repo: gh.Repo, dirs: list[str]) -> list[str]:
@@ -86,6 +92,10 @@ def scan_repo(repo: gh.Repo, config: Config) -> RepoResult:
         dirs = template_dirs(langs, config)
         dirs = _resolve_python_tool(repo, dirs)
         result.languages = dirs
+        if config.manager_for(repo.name) == "renovate":
+            for path in RENOVATE_ALT_PATHS:
+                if gh.get_file(repo.full_name, path, repo.default_branch) is not None:
+                    raise ValueError(f"Renovate config at {path}, move it to renovate.json")
         has_workflows = gh.has_workflow_files(repo.full_name, repo.default_branch)
         desired = desired_files(
             dirs, config, private=repo.private, repo=repo.name,
@@ -106,7 +116,7 @@ def scan_repo(repo: gh.Repo, config: Config) -> RepoResult:
             current = gh.get_file(repo.full_name, path, repo.default_branch)
             if current is not None:
                 result.files.append(FileResult(path, kind, Status.EXTRA, "", current))
-    except gh.GhError as exc:
+    except (gh.GhError, ValueError) as exc:
         result.error = str(exc)
     return result
 
@@ -134,6 +144,12 @@ def scan(
         include_archived=config.include_archived,
         include_forks=config.include_forks,
     )
+    unknown = set(config.dependency_manager_repos) - {r.name for r in repos}
+    if unknown:
+        warnings.warn(
+            f"dependency_manager_repos names unknown repos: {sorted(unknown)}",
+            stacklevel=2,
+        )
     repos = _selected(repos, config)
     if on_start:
         on_start(len(repos))

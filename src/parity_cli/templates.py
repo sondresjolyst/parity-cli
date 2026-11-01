@@ -16,6 +16,16 @@ BASE_DIR = "_base"
 ACTIONS_DIR = "_actions"
 DEPENDABOT_PATH = ".github/dependabot.yml"
 RENOVATE_PATH = "renovate.json"
+RENOVATE_ALT_PATHS = (
+    "renovate.json5",
+    ".github/renovate.json",
+    ".github/renovate.json5",
+    ".gitlab/renovate.json",
+    ".gitlab/renovate.json5",
+    ".renovaterc",
+    ".renovaterc.json",
+    ".renovaterc.json5",
+)
 CODEOWNERS_PATH = ".github/CODEOWNERS"
 WORKFLOWS_PREFIX = ".github/workflows"
 DEPENDABOT_FRAGMENT = "dependabot.fragment.yml"
@@ -128,22 +138,53 @@ def _renovate(config: Config) -> DesiredFile:
     return DesiredFile(RENOVATE_PATH, Kind.RENOVATE, json.dumps(doc, indent=2) + "\n")
 
 
-def renovate_extends_preset(desired: str, current: str) -> bool:
-    """True if a repo's renovate.json extends the preset. Repos keep their own rules."""
+def _renovate_doc(current: str) -> dict:
     try:
         doc = json.loads(current)
-    except json.JSONDecodeError:
-        return False
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{RENOVATE_PATH} is not plain JSON, update it by hand") from exc
     if not isinstance(doc, dict):
-        return False
-    return set(json.loads(desired)["extends"]) <= set(doc.get("extends", []))
+        raise ValueError(f"{RENOVATE_PATH} is not a JSON object, update it by hand")
+    return doc
+
+
+def _renovate_extends(doc: dict) -> list[str]:
+    value = doc.get("extends")
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list) and all(isinstance(item, str) for item in value):
+        return list(value)
+    raise ValueError(f"{RENOVATE_PATH} has an invalid extends, update it by hand")
+
+
+def _renovate_preset(desired: str) -> str:
+    return json.loads(desired)["extends"][0]
+
+
+def renovate_extends_preset(desired: str, current: str) -> bool:
+    """True if a repo's renovate.json extends the preset, pinned or not."""
+    preset = _renovate_preset(desired)
+    return any(
+        item == preset or item.startswith(f"{preset}#")
+        for item in _renovate_extends(_renovate_doc(current))
+    )
+
+
+def merge_renovate(desired: str, current: str) -> str:
+    """Add the preset to a repo's renovate.json and keep everything else."""
+    doc = _renovate_doc(current)
+    doc["extends"] = [_renovate_preset(desired), *_renovate_extends(doc)]
+    return json.dumps(doc, indent=2) + "\n"
 
 
 def removable_manager_files(config: Config, repo: str) -> list[tuple[str, Kind]]:
     """Files the old manager left behind. Only moving to Renovate removes anything."""
     if config.manager_for(repo) != "renovate":
         return []
-    files = [(DEPENDABOT_PATH, Kind.DEPENDABOT)]
+    # Kind.RENOVATE, so `apply --only renovate` moves the repo as one unit.
+    files = [(DEPENDABOT_PATH, Kind.RENOVATE)]
     if config.renovate_remove_codeowners:
         files.append((CODEOWNERS_PATH, Kind.CODEOWNERS))
     return files
@@ -182,7 +223,7 @@ def _manager_ok(value, manager: str) -> bool:
 
 
 def classify_workflow(
-    value, dirs: list[str], private: bool, repo: str, *, manager: str = "dependabot"
+    value, dirs: list[str], private: bool, repo: str, *, manager: str
 ) -> str:
     """Return 'desired', 'removable', or 'ignore' for a workflow in a repo."""
     langs, visibility, exclude = _wf_spec(value)

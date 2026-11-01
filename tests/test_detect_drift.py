@@ -1,4 +1,7 @@
+import json
 from dataclasses import replace
+
+import pytest
 
 from parity_cli import drift, gh
 from parity_cli.detect import template_dirs
@@ -113,16 +116,78 @@ def test_renovate_repo_rules_are_kept_as_a_match():
     assert _cmp(_RENOVATE, current, Kind.RENOVATE) is Status.MATCH
 
 
-def test_renovate_without_the_preset_drifts():
-    assert _cmp(_RENOVATE, '{"extends": ["config:base"]}', Kind.RENOVATE) is Status.DRIFT
+def _renovate_result(current):
+    d = DesiredFile("renovate.json", Kind.RENOVATE, _RENOVATE)
+    return drift._compare(d, current)
 
 
-def test_renovate_invalid_json_drifts():
-    assert _cmp(_RENOVATE, "{not json", Kind.RENOVATE) is Status.DRIFT
+def test_renovate_without_the_preset_keeps_repo_rules_on_apply():
+    current = '{"extends": ["config:base"], "packageRules": [{"enabled": false}]}'
+    result = _renovate_result(current)
+    assert result.status is Status.DRIFT
+    merged = json.loads(result.desired)
+    assert merged["extends"] == [_PRESET, "config:base"]
+    assert merged["packageRules"] == [{"enabled": False}]
 
 
-def test_renovate_non_object_json_drifts():
-    assert _cmp(_RENOVATE, "[]", Kind.RENOVATE) is Status.DRIFT
+def test_renovate_string_or_null_extends_gets_the_preset():
+    assert json.loads(_renovate_result('{"extends": "config:base"}').desired)["extends"] == [
+        _PRESET, "config:base"
+    ]
+    assert json.loads(_renovate_result('{"extends": null}').desired)["extends"] == [_PRESET]
+    assert json.loads(_renovate_result("{}").desired)["extends"] == [_PRESET]
+
+
+def test_renovate_pinned_preset_matches():
+    current = '{"extends": ["github>acme/renovate-config#v1"]}'
+    assert _cmp(_RENOVATE, current, Kind.RENOVATE) is Status.MATCH
+
+
+def test_renovate_longer_repo_name_is_not_the_preset():
+    current = '{"extends": ["github>acme/renovate-config-old"]}'
+    assert _cmp(_RENOVATE, current, Kind.RENOVATE) is Status.DRIFT
+
+
+@pytest.mark.parametrize(
+    "current", ["{not json", "[]", '{"extends": [{"a": 1}]}', '{"extends": 3}']
+)
+def test_renovate_unreadable_config_is_never_overwritten(current):
+    with pytest.raises(ValueError):
+        _renovate_result(current)
+
+
+def _renovate_config(config):
+    return replace(
+        config,
+        dependency_manager="renovate",
+        dependency_manager_repos={},
+        renovate_preset=_PRESET,
+    )
+
+
+def _stub_scan(monkeypatch, existing):
+    monkeypatch.setattr(gh, "languages", lambda *a, **k: {"TypeScript": 1})
+    monkeypatch.setattr(gh, "has_workflow_files", lambda *a, **k: True)
+    monkeypatch.setattr(gh, "get_file", lambda _r, path, _b: existing.get(path))
+
+
+def test_scan_reports_unreadable_renovate_json_without_stopping(config, monkeypatch):
+    _stub_scan(monkeypatch, {"renovate.json": "{not json"})
+    result = drift.scan_repo(_REPO, _renovate_config(config))
+    assert "renovate.json" in result.error
+
+
+def test_scan_reports_renovate_config_in_another_location(config, monkeypatch):
+    _stub_scan(monkeypatch, {".github/renovate.json": "{}"})
+    result = drift.scan_repo(_REPO, _renovate_config(config))
+    assert ".github/renovate.json" in result.error
+
+
+def test_scan_warns_about_unknown_override_repos(config, monkeypatch):
+    typo = replace(config, dependency_manager_repos={"nstuning_app": "renovate"})
+    monkeypatch.setattr(drift, "discover_repos", lambda *a, **k: [])
+    with pytest.warns(UserWarning, match="nstuning_app"):
+        drift.scan(typo)
 
 
 def test_scan_marks_old_manager_files_for_removal(config, monkeypatch):

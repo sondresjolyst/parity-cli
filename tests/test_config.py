@@ -82,3 +82,17 @@ def test_renovate_requires_a_preset(tmp_path):
         config_mod.load(_write(
             tmp_path, "owner: me\ndependency_manager_repos:\n  r: renovate\n"
         ))
+
+
+def test_repo_manager_without_a_value_is_rejected(tmp_path):
+    with pytest.raises(ValueError, match="dependency_manager_repos"):
+        config_mod.load(_write(
+            tmp_path, "owner: me\ndependency_manager_repos:\n  r:\n"
+        ))
+
+
+def test_quoted_remove_codeowners_is_rejected(tmp_path):
+    with pytest.raises(ValueError, match="renovate_remove_codeowners"):
+        config_mod.load(_write(
+            tmp_path, 'owner: me\nrenovate_remove_codeowners: "false"\n'
+        ))

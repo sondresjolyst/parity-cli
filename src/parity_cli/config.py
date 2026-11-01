@@ -119,6 +119,10 @@ def load(path: str | Path) -> Config:
 
     dependency_manager = str(data.get("dependency_manager", "dependabot"))
     dependency_manager_repos = dict(data.get("dependency_manager_repos", {}) or {})
+    if not all(isinstance(v, str) for v in dependency_manager_repos.values()):
+        raise ValueError(
+            f"Every dependency_manager_repos entry in {path} needs a manager name."
+        )
     managers = {dependency_manager, *dependency_manager_repos.values()}
     unknown = managers - set(DEPENDENCY_MANAGERS)
     if unknown:
@@ -131,6 +135,10 @@ def load(path: str | Path) -> Config:
         raise ValueError(
             f"Renovate is selected but no renovate_preset is configured in {path}"
         )
+
+    remove_codeowners = data.get("renovate_remove_codeowners", False)
+    if not isinstance(remove_codeowners, bool):
+        raise ValueError(f"renovate_remove_codeowners in {path} must be true or false.")
 
     lang_map = dict(DEFAULT_LANGUAGE_MAP)
     lang_map.update(data.get("language_map", {}))
@@ -155,7 +163,5 @@ def load(path: str | Path) -> Config:
         dependency_manager=dependency_manager,
         dependency_manager_repos=dependency_manager_repos,
         renovate_preset=renovate_preset,
-        renovate_remove_codeowners=bool(
-            data.get("renovate_remove_codeowners", False)
-        ),
+        renovate_remove_codeowners=remove_codeowners,
     )
