@@ -34,6 +34,8 @@ class Config:
     settings: dict[str, object] = field(default_factory=dict)
     # placeholders substituted into templates, e.g. {"owner": "@sondresjolyst"}
     vars: dict[str, str] = field(default_factory=dict)
+    # repo name -> vars that override the ones above for that repo
+    repo_vars: dict[str, dict[str, str]] = field(default_factory=dict)
     repos_include: list[str] = field(default_factory=list)
     repos_exclude: list[str] = field(default_factory=list)
     # "dependabot" or "renovate"; repos can override it individually
@@ -158,6 +160,7 @@ def load(path: str | Path) -> Config:
         workflows=data.get("workflows", {"dependency-review.yml": ["all"]}),
         settings=data.get("settings", {}),
         vars=data.get("vars", {}),
+        repo_vars=data.get("repo_vars", {}) or {},
         repos_include=data.get("repos_include", []),
         repos_exclude=data.get("repos_exclude", []),
         dependency_manager=dependency_manager,

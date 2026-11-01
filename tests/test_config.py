@@ -39,6 +39,13 @@ def test_team_mode_allows_owner_to_be_omitted():
     assert cfg.teams == ["my-org/platform-team"]
 
 
+def test_repo_vars_load(tmp_path):
+    cfg = config_mod.load(_write(
+        tmp_path, "owner: me\nrepo_vars:\n  r:\n    release_reviewers: a\n"
+    ))
+    assert cfg.repo_vars == {"r": {"release_reviewers": "a"}}
+
+
 def _write(tmp_path, text):
     path = tmp_path / "parity.yml"
     path.write_text(text, encoding="utf-8")

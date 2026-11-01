@@ -97,7 +97,7 @@ def status(config: Path = CONFIG_OPT) -> None:
         if r.error:
             table.add_row(r.repo, "[red]error[/]", r.error, "", "")
             continue
-        cells = {"dependabot": [], "renovate": [], "codeowners": [], "workflow": []}
+        cells = {"dependabot": [], "renovate": [], "codeowners": [], "workflow": [], "file": []}
         for f in r.files:
             cells[f.kind.value].append(f.status)
         table.add_row(
@@ -105,7 +105,7 @@ def status(config: Path = CONFIG_OPT) -> None:
             ", ".join(r.languages) or "-",
             _cell(cells["dependabot"] + cells["renovate"]),
             _cell(cells["codeowners"]),
-            _cell(cells["workflow"]),
+            _cell(cells["workflow"] + cells["file"]),
         )
     console.print(table)
     _summary(results)

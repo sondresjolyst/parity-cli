@@ -17,7 +17,9 @@ from .templates import (
     RENOVATE_ALT_PATHS,
     desired_files,
     load_dependabot,
+    merge_npmrc,
     merge_renovate,
+    npmrc_has_settings,
     removable_manager_files,
     removable_workflow_paths,
     renovate_extends_preset,
@@ -47,6 +49,8 @@ def _equal(desired: DesiredFile, current: str) -> bool:
             return load_dependabot(desired.content) == load_dependabot(current)
         except yaml.YAMLError:
             pass
+    if desired.path == ".npmrc":
+        return npmrc_has_settings(desired.content, current)
     if desired.kind is Kind.RENOVATE:
         return renovate_extends_preset(desired.content, current)
     if desired.kind is Kind.WORKFLOW:
@@ -68,6 +72,8 @@ def _compare(desired: DesiredFile, current: str | None) -> FileResult:
     content = desired.content
     if status is Status.DRIFT and desired.kind is Kind.RENOVATE:
         content = merge_renovate(desired.content, current)
+    if status is Status.DRIFT and desired.path == ".npmrc":
+        content = merge_npmrc(desired.content, current)
     return FileResult(desired.path, desired.kind, status, content, current)
 
 
