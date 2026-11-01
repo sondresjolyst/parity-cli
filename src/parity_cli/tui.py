@@ -92,7 +92,7 @@ class ParityApp(App):
 
     # cycled by action_cycle_filter; None means all kinds
     FILTER_OPTIONS: list[set[Kind] | None] = [
-        None, {Kind.DEPENDABOT}, {Kind.CODEOWNERS}, {Kind.WORKFLOW},
+        None, {Kind.DEPENDABOT, Kind.RENOVATE}, {Kind.CODEOWNERS}, {Kind.WORKFLOW},
     ]
 
     def __init__(self, config: Config) -> None:
@@ -120,7 +120,7 @@ class ParityApp(App):
     def on_mount(self) -> None:
         repos = self.query_one("#repos", DataTable)
         repos.add_columns(
-            "", "Repo", "Languages", "Dependabot", "CODEOWNERS", "Workflows", "PR"
+            "", "Repo", "Languages", "Updates", "CODEOWNERS", "Workflows", "PR"
         )
         settings_table = self.query_one("#settings-table", DataTable)
         settings_table.add_columns("", "Repo", "Setting", "Current", "Desired")
@@ -230,7 +230,7 @@ class ParityApp(App):
         workflows = by_kind.get("workflow", []) + by_kind.get("file", [])
         return [
             mark, r.repo, ", ".join(r.languages) or "-",
-            _cell(by_kind.get("dependabot", [])),
+            _cell(by_kind.get("dependabot", []) + by_kind.get("renovate", [])),
             _cell(by_kind.get("codeowners", [])),
             _cell(workflows),
             self._pr_cell(r.repo),

@@ -1,7 +1,7 @@
 # parity-cli
 
-See and fix drift in `dependabot.yml`, `CODEOWNERS` and shared workflows across
-all your GitHub repos.
+See and fix drift in `dependabot.yml`, `renovate.json`, `CODEOWNERS` and shared
+workflows across all your GitHub repos.
 
 This repo is the config: `parity.yml`, `templates/` and `.github/` define what
 every managed repo should look like. Edit those, then run the commands below.
@@ -112,6 +112,32 @@ vars:
 - In team mode, if `vars.owner` is omitted, parity defaults `${owner}` to the
   first configured team as `@org/team_slug` when rendering templates (including
   the default `CODEOWNERS` template).
+
+## Dependency updates
+
+Dependabot is the default, so existing configs keep working unchanged. To move
+repos to Renovate:
+
+```yaml
+dependency_manager: dependabot      # default for every repo
+dependency_manager_repos:           # per-repo override, either direction
+  my-repo: renovate
+renovate_preset: github>my-org/renovate-config  # required when Renovate is used
+renovate_remove_codeowners: false   # true also removes CODEOWNERS from Renovate repos
+
+workflows:
+  dependabot-title.yml:
+    languages: [all]
+    manager: dependabot             # only for repos using this manager
+```
+
+- A Renovate repo gets a `renovate.json` that extends the preset. `apply` removes
+  its `dependabot.yml`.
+- A `renovate.json` matches as long as it extends the preset, so a repo can add
+  its own rules.
+- A Dependabot repo's `renovate.json` is left alone.
+- Only set `renovate_remove_codeowners` where branch protection does not require
+  code owner review.
 
 ## Tests
 

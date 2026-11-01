@@ -12,6 +12,8 @@ def _workflow_name(path: str) -> str:
 def _noun(kind: Kind, files: list[FileResult]) -> str:
     if kind is Kind.DEPENDABOT:
         return "`dependabot.yml`"
+    if kind is Kind.RENOVATE:
+        return "`renovate.json`"
     if kind is Kind.CODEOWNERS:
         return "`CODEOWNERS`"
     if kind is Kind.FILE:
@@ -33,7 +35,7 @@ def _commit_type(kinds: set[Kind]) -> str:
     return "ci"
 
 
-_ORDER = (Kind.DEPENDABOT, Kind.CODEOWNERS, Kind.WORKFLOW, Kind.FILE)
+_ORDER = (Kind.DEPENDABOT, Kind.RENOVATE, Kind.CODEOWNERS, Kind.WORKFLOW, Kind.FILE)
 
 
 def _clause(verb: str, changes: list[FileResult]) -> str:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 from string import Template
@@ -14,6 +15,7 @@ from .model import DesiredFile, Kind
 BASE_DIR = "_base"
 ACTIONS_DIR = "_actions"
 DEPENDABOT_PATH = ".github/dependabot.yml"
+RENOVATE_PATH = "renovate.json"
 CODEOWNERS_PATH = ".github/CODEOWNERS"
 WORKFLOWS_PREFIX = ".github/workflows"
 DEPENDABOT_FRAGMENT = "dependabot.fragment.yml"
@@ -118,6 +120,35 @@ def _dependabot(dirs: list[str], config: Config, *, has_workflows: bool = True) 
     return DesiredFile(DEPENDABOT_PATH, Kind.DEPENDABOT, content)
 
 
+def _renovate(config: Config) -> DesiredFile:
+    doc = {
+        "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+        "extends": [config.renovate_preset],
+    }
+    return DesiredFile(RENOVATE_PATH, Kind.RENOVATE, json.dumps(doc, indent=2) + "\n")
+
+
+def renovate_extends_preset(desired: str, current: str) -> bool:
+    """True if a repo's renovate.json extends the preset. Repos keep their own rules."""
+    try:
+        doc = json.loads(current)
+    except json.JSONDecodeError:
+        return False
+    if not isinstance(doc, dict):
+        return False
+    return set(json.loads(desired)["extends"]) <= set(doc.get("extends", []))
+
+
+def removable_manager_files(config: Config, repo: str) -> list[tuple[str, Kind]]:
+    """Files the old manager left behind. Only moving to Renovate removes anything."""
+    if config.manager_for(repo) != "renovate":
+        return []
+    files = [(DEPENDABOT_PATH, Kind.DEPENDABOT)]
+    if config.renovate_remove_codeowners:
+        files.append((CODEOWNERS_PATH, Kind.CODEOWNERS))
+    return files
+
+
 def _codeowners(config: Config) -> DesiredFile | None:
     path = config.templates_dir / BASE_DIR / "CODEOWNERS"
     if not path.exists():
@@ -145,13 +176,20 @@ def _visibility_ok(visibility: str, private: bool) -> bool:
     return True
 
 
-def classify_workflow(value, dirs: list[str], private: bool, repo: str) -> str:
+def _manager_ok(value, manager: str) -> bool:
+    wanted = value.get("manager") if isinstance(value, dict) else None
+    return wanted is None or wanted == manager
+
+
+def classify_workflow(
+    value, dirs: list[str], private: bool, repo: str, *, manager: str = "dependabot"
+) -> str:
     """Return 'desired', 'removable', or 'ignore' for a workflow in a repo."""
     langs, visibility, exclude = _wf_spec(value)
     if repo in exclude:
         return "ignore"
     lang_ok = "all" in langs or any(lang in dirs for lang in langs)
-    if lang_ok and _visibility_ok(visibility, private):
+    if lang_ok and _visibility_ok(visibility, private) and _manager_ok(value, manager):
         return "desired"
     return "removable"
 
@@ -161,8 +199,9 @@ def removable_workflow_paths(
 ) -> list[str]:
     variables = _template_vars(config)
     paths = []
+    manager = config.manager_for(repo)
     for name, value in config.workflows.items():
-        if classify_workflow(value, dirs, private, repo) != "removable":
+        if classify_workflow(value, dirs, private, repo, manager=manager) != "removable":
             continue
         src = config.workflows_dir / name
         if src.is_file() and references_repo(_read(src, variables), full_name):
@@ -183,8 +222,9 @@ def _workflows(
 ) -> list[DesiredFile]:
     variables = _template_vars(config)
     found: dict[str, DesiredFile] = {}
+    manager = config.manager_for(repo)
     for filename, value in config.workflows.items():
-        if classify_workflow(value, dirs, private, repo) != "desired":
+        if classify_workflow(value, dirs, private, repo, manager=manager) != "desired":
             continue
         src = config.workflows_dir / filename
         if not src.is_file():
@@ -220,11 +260,15 @@ def desired_files(
     has_workflows: bool = True,
 ) -> list[DesiredFile]:
     files: list[DesiredFile] = []
-    dependabot = _dependabot(dirs, config, has_workflows=has_workflows)
-    if dependabot:
-        files.append(dependabot)
+    renovate = config.manager_for(repo) == "renovate"
+    if renovate:
+        files.append(_renovate(config))
+    else:
+        dependabot = _dependabot(dirs, config, has_workflows=has_workflows)
+        if dependabot:
+            files.append(dependabot)
     codeowners = _codeowners(config)
-    if codeowners:
+    if codeowners and not (renovate and config.renovate_remove_codeowners):
         files.append(codeowners)
     files.extend(_workflows(dirs, config, private, repo, full_name))
     files.extend(_generic_files(dirs, config))

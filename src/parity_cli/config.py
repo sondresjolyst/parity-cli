@@ -36,7 +36,19 @@ class Config:
     vars: dict[str, str] = field(default_factory=dict)
     repos_include: list[str] = field(default_factory=list)
     repos_exclude: list[str] = field(default_factory=list)
+    # "dependabot" or "renovate"; repos can override it individually
+    dependency_manager: str = "dependabot"
+    dependency_manager_repos: dict[str, str] = field(default_factory=dict)
+    # preset every renovate.json extends, e.g. "github>my-org/renovate-config"
+    renovate_preset: str = ""
+    # also remove CODEOWNERS from Renovate repos, so bot PRs do not request review
+    renovate_remove_codeowners: bool = False
 
+    def manager_for(self, repo: str) -> str:
+        return self.dependency_manager_repos.get(repo, self.dependency_manager)
+
+
+DEPENDENCY_MANAGERS = ("dependabot", "renovate")
 
 DEFAULT_LANGUAGE_MAP = {
     "Python": "python",
@@ -105,6 +117,21 @@ def load(path: str | Path) -> Config:
             "discovery_mode is 'team' but no teams are configured in parity.yml"
         )
 
+    dependency_manager = str(data.get("dependency_manager", "dependabot"))
+    dependency_manager_repos = dict(data.get("dependency_manager_repos", {}) or {})
+    managers = {dependency_manager, *dependency_manager_repos.values()}
+    unknown = managers - set(DEPENDENCY_MANAGERS)
+    if unknown:
+        raise ValueError(
+            f"Unsupported dependency_manager {sorted(unknown)} in {path}. "
+            f"Expected one of {DEPENDENCY_MANAGERS}."
+        )
+    renovate_preset = str(data.get("renovate_preset", "") or "")
+    if "renovate" in managers and not renovate_preset:
+        raise ValueError(
+            f"Renovate is selected but no renovate_preset is configured in {path}"
+        )
+
     lang_map = dict(DEFAULT_LANGUAGE_MAP)
     lang_map.update(data.get("language_map", {}))
     return Config(
@@ -125,4 +152,10 @@ def load(path: str | Path) -> Config:
         vars=data.get("vars", {}),
         repos_include=data.get("repos_include", []),
         repos_exclude=data.get("repos_exclude", []),
+        dependency_manager=dependency_manager,
+        dependency_manager_repos=dependency_manager_repos,
+        renovate_preset=renovate_preset,
+        renovate_remove_codeowners=bool(
+            data.get("renovate_remove_codeowners", False)
+        ),
     )

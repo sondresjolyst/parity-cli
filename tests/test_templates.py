@@ -1,3 +1,4 @@
+import json
 from dataclasses import replace
 
 import yaml
@@ -94,3 +95,124 @@ def test_cpp_has_no_pip_entry(config):
     doc = yaml.safe_load(next(f for f in files if f.kind is Kind.DEPENDABOT).content)
     ecosystems = {u["package-ecosystem"] for u in doc["updates"]}
     assert ecosystems == {"github-actions"}
+
+
+_PRESET = "github>acme/renovate-config"
+
+
+def _renovate(config, **overrides):
+    return replace(
+        config,
+        dependency_manager="renovate",
+        renovate_preset=_PRESET,
+        **overrides,
+    )
+
+
+def test_dependabot_is_the_default_manager(config):
+    default = replace(config, dependency_manager_repos={})
+    kinds = {f.kind for f in templates.desired_files(["node"], default, repo="r")}
+    assert Kind.DEPENDABOT in kinds
+    assert Kind.RENOVATE not in kinds
+
+
+def test_renovate_repo_gets_renovate_json_instead_of_dependabot(config):
+    files = templates.desired_files(
+        ["node"], _renovate(config, dependency_manager_repos={}), repo="r"
+    )
+    kinds = {f.kind for f in files}
+    assert Kind.DEPENDABOT not in kinds
+    renovate = next(f for f in files if f.kind is Kind.RENOVATE)
+    assert renovate.path == "renovate.json"
+    assert json.loads(renovate.content)["extends"] == [_PRESET]
+
+
+def test_repo_override_picks_manager_per_repo(config):
+    mixed = replace(
+        config,
+        dependency_manager="dependabot",
+        dependency_manager_repos={"moved": "renovate"},
+        renovate_preset=_PRESET,
+    )
+    moved = {f.kind for f in templates.desired_files(["node"], mixed, repo="moved")}
+    other = {f.kind for f in templates.desired_files(["node"], mixed, repo="other")}
+    assert Kind.RENOVATE in moved and Kind.DEPENDABOT not in moved
+    assert Kind.DEPENDABOT in other and Kind.RENOVATE not in other
+
+
+def test_override_back_to_dependabot_when_default_is_renovate(config):
+    mixed = _renovate(config, dependency_manager_repos={"stay": "dependabot"})
+    stay = {f.kind for f in templates.desired_files(["node"], mixed, repo="stay")}
+    assert Kind.DEPENDABOT in stay and Kind.RENOVATE not in stay
+
+
+def test_codeowners_stays_for_renovate_unless_removal_is_enabled(config):
+    kept = templates.desired_files(
+        ["node"],
+        _renovate(config, dependency_manager_repos={}, renovate_remove_codeowners=False),
+        repo="r",
+    )
+    assert any(f.kind is Kind.CODEOWNERS for f in kept)
+    removed = templates.desired_files(
+        ["node"],
+        _renovate(config, dependency_manager_repos={}, renovate_remove_codeowners=True),
+        repo="r",
+    )
+    assert not any(f.kind is Kind.CODEOWNERS for f in removed)
+
+
+def test_removable_manager_files_for_renovate(config):
+    assert templates.removable_manager_files(
+        _renovate(config, dependency_manager_repos={}, renovate_remove_codeowners=False),
+        "r",
+    ) == [(templates.DEPENDABOT_PATH, Kind.DEPENDABOT)]
+    assert templates.removable_manager_files(
+        _renovate(config, dependency_manager_repos={}, renovate_remove_codeowners=True),
+        "r",
+    ) == [
+        (templates.DEPENDABOT_PATH, Kind.DEPENDABOT),
+        (templates.CODEOWNERS_PATH, Kind.CODEOWNERS),
+    ]
+
+
+def test_dependabot_repo_never_removes_anything(config):
+    dependabot = replace(
+        config,
+        dependency_manager="dependabot",
+        dependency_manager_repos={},
+        renovate_remove_codeowners=True,
+    )
+    assert templates.removable_manager_files(dependabot, "r") == []
+
+
+def test_workflow_manager_filter():
+    value = {"languages": ["all"], "manager": "dependabot"}
+    assert (
+        templates.classify_workflow(value, [], False, "r", manager="dependabot")
+        == "desired"
+    )
+    assert (
+        templates.classify_workflow(value, [], False, "r", manager="renovate")
+        == "removable"
+    )
+
+
+def test_workflow_without_manager_applies_to_both():
+    for manager in ("dependabot", "renovate"):
+        assert (
+            templates.classify_workflow(["all"], [], False, "r", manager=manager)
+            == "desired"
+        )
+
+
+def test_dependabot_title_workflow_follows_the_manager(config):
+    title = ".github/workflows/dependabot-title.yml"
+    dependabot = replace(config, dependency_manager_repos={})
+    files = templates.desired_files(["node"], dependabot, repo="r")
+    assert any(f.path == title for f in files)
+    renovate = _renovate(config, dependency_manager_repos={})
+    files = templates.desired_files(["node"], renovate, repo="r")
+    assert not any(f.path == title for f in files)
+    assert title in templates.removable_workflow_paths(
+        ["node"], renovate, False, "r", "o/r"
+    )
