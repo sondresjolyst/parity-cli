@@ -135,6 +135,16 @@ workflows:
   its `dependabot.yml`.
 - `release-review.yml` requests review on release PRs. Set it to `manager: renovate`
   when CODEOWNERS is removed, as nothing else asks for that review then.
+- `vars.release_reviewers` sets who is asked, as comma separated users or `org/team`
+  slugs. It defaults to `vars.owner`. `repo_vars` overrides any var per repo:
+
+  ```yaml
+  vars:
+    release_reviewers: me,my-org/platform-team
+  repo_vars:
+    my-repo:
+      release_reviewers: someone-else
+  ```
 - Install the Renovate app on a repo before `apply` removes its `dependabot.yml`.
 - A `renovate.json` matches as long as it extends the preset, so a repo can add
   its own rules. If the preset is missing, `apply` adds it and keeps the rest.

@@ -232,7 +232,7 @@ def test_release_review_workflow_only_on_renovate_repos(config):
     moved = _renovate(config, dependency_manager_repos={})
     stay = replace(config, dependency_manager="dependabot", dependency_manager_repos={})
     wanted = next(f for f in templates.desired_files([], moved, repo="r") if f.path == path)
-    assert 'gh pr edit "$number" --add-reviewer "$GITHUB_REPOSITORY_OWNER"' in wanted.content
+    assert 'gh pr edit "$number" --add-reviewer "$REVIEWERS"' in wanted.content
     assert "${{ github.token }}" in wanted.content
     assert not any(f.path == path for f in templates.desired_files([], stay, repo="r"))
 
@@ -254,3 +254,47 @@ def test_release_review_workflow_is_valid_yaml(config):
     run = doc["jobs"]["request"]["steps"][0]["run"]
     assert "set -euo pipefail" in run
     assert ".reviews | length" in run
+
+
+def _review_env(config, **overrides):
+    moved = _renovate(config, dependency_manager_repos={}, **overrides)
+    wanted = next(
+        f for f in templates.desired_files([], moved, repo="r")
+        if f.path == ".github/workflows/release-review.yml"
+    )
+    job = yaml.safe_load(wanted.content)["jobs"]["request"]
+    return job["steps"][0]["env"]["REVIEWERS"], job["if"]
+
+
+def test_release_reviewers_come_from_vars(config):
+    reviewers, condition = _review_env(
+        config, vars={"owner": "@o", "release_reviewers": "a,org/team"}
+    )
+    assert reviewers == "a,org/team"
+    assert "$" not in condition.replace("'$'", "")
+
+
+def test_release_reviewers_default_to_the_owner(config):
+    reviewers, _ = _review_env(config, vars={"owner": "@org/team"})
+    assert reviewers == "org/team"
+
+
+def test_repo_vars_override_release_reviewers_for_that_repo_only(config):
+    reviewers, _ = _review_env(
+        config,
+        vars={"owner": "@o", "release_reviewers": "a"},
+        repo_vars={"r": {"release_reviewers": "b"}},
+    )
+    assert reviewers == "b"
+    other, _ = _review_env(
+        config,
+        vars={"owner": "@o", "release_reviewers": "a"},
+        repo_vars={"other": {"release_reviewers": "b"}},
+    )
+    assert other == "a"
+
+
+def test_unfilled_source_workflow_cannot_run():
+    source = (templates.Path(__file__).parents[1] / ".github/workflows/release-review.yml")
+    job = yaml.safe_load(source.read_text(encoding="utf-8"))["jobs"]["request"]
+    assert job["if"] == "!contains('${release_reviewers}', '$')"

@@ -42,6 +42,11 @@ settings:
 
 vars:
   owner: "@sondresjolyst"
+  release_reviewers: sondresjolyst   # comma separated users or org/team slugs
+
+# repo_vars:           # per-repo overrides of vars
+#   my-repo:
+#     release_reviewers: someone,my-org/my-team
 
 # repos_include: []   # only these repos (empty = all)
 # repos_exclude: []   # skip these repos

@@ -95,12 +95,15 @@ def _read(path: Path, variables: dict[str, str]) -> str:
     return _subst(path.read_text(encoding="utf-8"), variables)
 
 
-def _template_vars(config: Config) -> dict[str, str]:
+def _template_vars(config: Config, repo: str = "") -> dict[str, str]:
     variables = dict(config.vars)
     if config.discovery_mode == "team" and "owner" not in variables and config.teams:
         variables["owner"] = f"@{config.teams[0]}"
     # Per-ecosystem dependabot commit-message prefixes; override any of these
     # in a config's `vars` to change or drop the scope for that config.
+    if "owner" in variables:
+        variables.setdefault("release_reviewers", variables["owner"].lstrip("@"))
+    variables.update(config.repo_vars.get(repo, {}))
     variables.setdefault("uv_commit_prefix", "deps(uv)")
     variables.setdefault("npm_commit_prefix", "deps(npm)")
     variables.setdefault("pip_commit_prefix", "deps(pip)")
@@ -277,7 +280,7 @@ def references_repo(content: str, full_name: str) -> bool:
 def _workflows(
     dirs: list[str], config: Config, private: bool, repo: str, full_name: str
 ) -> list[DesiredFile]:
-    variables = _template_vars(config)
+    variables = _template_vars(config, repo)
     found: dict[str, DesiredFile] = {}
     manager = config.manager_for(repo)
     for filename, value in config.workflows.items():
