@@ -138,8 +138,10 @@ def _cell(statuses: list[Status]) -> str:
 
 def _summary(results) -> None:
     drifted = [r for r in results if r.changed and not r.error]
+    failed = [r for r in results if r.error]
+    errors = f", [red]{len(failed)}[/] failed" if failed else ""
     console.print(
-        f"\n{len(results)} repos, [yellow]{len(drifted)}[/] with drift. "
+        f"\n{len(results)} repos, [yellow]{len(drifted)}[/] with drift{errors}. "
         "Run [bold]parity diff <repo>[/] or [bold]parity apply[/]."
     )
 
