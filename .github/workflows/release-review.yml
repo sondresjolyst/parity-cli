@@ -11,8 +11,6 @@ permissions: {}
 jobs:
   request:
     name: Request review
-    # parity fills in the reviewers. The unfilled source copy never runs.
-    if: "!contains('${release_reviewers}', '$')"
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
@@ -24,6 +22,13 @@ jobs:
           REVIEWERS: ${release_reviewers}
         run: |
           set -euo pipefail
+          # parity fills in REVIEWERS. The unfilled source copy has nobody to ask.
+          case "$REVIEWERS" in
+            *[!a-zA-Z0-9,/_-]*)
+              echo "No reviewers configured, skipping"
+              exit 0
+              ;;
+          esac
           numbers=$(gh pr list --author app/github-actions --search "chore: release in:title" \
             --json number,reviews,reviewRequests \
             --jq '.[] | select((.reviews | length) == 0 and (.reviewRequests | length) == 0) | .number')

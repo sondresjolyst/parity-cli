@@ -1,6 +1,11 @@
 import json
+import os
+import shutil
+import subprocess
+from pathlib import Path
 from dataclasses import replace
 
+import pytest
 import yaml
 
 from parity_cli import templates
@@ -263,30 +268,29 @@ def _review_env(config, **overrides):
         if f.path == ".github/workflows/release-review.yml"
     )
     job = yaml.safe_load(wanted.content)["jobs"]["request"]
-    return job["steps"][0]["env"]["REVIEWERS"], job["if"]
+    return job["steps"][0]["env"]["REVIEWERS"]
 
 
 def test_release_reviewers_come_from_vars(config):
-    reviewers, condition = _review_env(
+    reviewers = _review_env(
         config, vars={"owner": "@o", "release_reviewers": "a,org/team"}
     )
     assert reviewers == "a,org/team"
-    assert "$" not in condition.replace("'$'", "")
 
 
 def test_release_reviewers_default_to_the_owner(config):
-    reviewers, _ = _review_env(config, vars={"owner": "@org/team"})
+    reviewers = _review_env(config, vars={"owner": "@org/team"})
     assert reviewers == "org/team"
 
 
 def test_repo_vars_override_release_reviewers_for_that_repo_only(config):
-    reviewers, _ = _review_env(
+    reviewers = _review_env(
         config,
         vars={"owner": "@o", "release_reviewers": "a"},
         repo_vars={"r": {"release_reviewers": "b"}},
     )
     assert reviewers == "b"
-    other, _ = _review_env(
+    other = _review_env(
         config,
         vars={"owner": "@o", "release_reviewers": "a"},
         repo_vars={"other": {"release_reviewers": "b"}},
@@ -294,7 +298,28 @@ def test_repo_vars_override_release_reviewers_for_that_repo_only(config):
     assert other == "a"
 
 
-def test_unfilled_source_workflow_cannot_run():
-    source = (templates.Path(__file__).parents[1] / ".github/workflows/release-review.yml")
+def _review_script():
+    source = Path(__file__).parents[1] / ".github/workflows/release-review.yml"
     job = yaml.safe_load(source.read_text(encoding="utf-8"))["jobs"]["request"]
-    assert job["if"] == "!contains('${release_reviewers}', '$')"
+    run = job["steps"][0]["run"]
+    return run[: run.index('numbers=$(')] + 'echo "continue"\n'
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+@pytest.mark.parametrize(
+    ("reviewers", "continues"),
+    [
+        ("${release_reviewers}", False),
+        ("sondresjolyst", True),
+        ("a-b_c,my-org/team", True),
+    ],
+)
+def test_review_script_skips_only_the_unfilled_source(reviewers, continues):
+    result = subprocess.run(
+        ["bash", "-c", _review_script()],
+        env={**os.environ, "REVIEWERS": reviewers},
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert ("continue" in result.stdout) is continues
