@@ -323,3 +323,10 @@ def test_review_script_skips_only_the_unfilled_source(reviewers, continues):
         check=True,
     )
     assert ("continue" in result.stdout) is continues
+
+
+def test_review_query_matches_the_branch_not_the_title():
+    source = Path(__file__).parents[1] / ".github/workflows/release-review.yml"
+    run = yaml.safe_load(source.read_text(encoding="utf-8"))["jobs"]["request"]["steps"][0]["run"]
+    assert 'startswith("release-please--")' in run
+    assert "in:title" not in run
