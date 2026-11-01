@@ -60,3 +60,13 @@ def test_add_and_remove_split():
 
 def test_empty():
     assert messages.build([])[0] == "chore: no changes"
+
+
+def test_renovate_migration_message():
+    subject, body = messages.build([
+        _fr("renovate.json", Kind.RENOVATE, Status.MISSING),
+        _fr(".github/dependabot.yml", Kind.DEPENDABOT, Status.EXTRA),
+    ])
+    assert subject == "ci: add `renovate.json`; remove `dependabot.yml`"
+    assert "- add `renovate.json`" in body
+    assert "- remove `.github/dependabot.yml`" in body

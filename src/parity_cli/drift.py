@@ -12,7 +12,13 @@ from . import gh
 from .config import Config, discover_repos
 from .detect import template_dirs
 from .model import DesiredFile, FileResult, Kind, RepoResult, Status
-from .templates import desired_files, load_dependabot, removable_workflow_paths
+from .templates import (
+    desired_files,
+    load_dependabot,
+    removable_manager_files,
+    removable_workflow_paths,
+    renovate_extends_preset,
+)
 
 
 _USES = re.compile(r"^(\s*(?:-\s*)?uses:\s*\S+?)@\S+.*$")
@@ -38,6 +44,8 @@ def _equal(desired: DesiredFile, current: str) -> bool:
             return load_dependabot(desired.content) == load_dependabot(current)
         except yaml.YAMLError:
             pass
+    if desired.kind is Kind.RENOVATE:
+        return renovate_extends_preset(desired.content, current)
     if desired.kind is Kind.WORKFLOW:
         want, have = _strip_action_refs(desired.content), _strip_action_refs(current)
         try:
@@ -94,6 +102,10 @@ def scan_repo(repo: gh.Repo, config: Config) -> RepoResult:
                 result.files.append(
                     FileResult(path, Kind.WORKFLOW, Status.EXTRA, "", current)
                 )
+        for path, kind in removable_manager_files(config, repo.name):
+            current = gh.get_file(repo.full_name, path, repo.default_branch)
+            if current is not None:
+                result.files.append(FileResult(path, kind, Status.EXTRA, "", current))
     except gh.GhError as exc:
         result.error = str(exc)
     return result

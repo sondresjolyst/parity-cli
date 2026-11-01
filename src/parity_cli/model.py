@@ -8,6 +8,7 @@ from enum import Enum
 
 class Kind(str, Enum):
     DEPENDABOT = "dependabot"
+    RENOVATE = "renovate"
     CODEOWNERS = "codeowners"
     WORKFLOW = "workflow"
     FILE = "file"

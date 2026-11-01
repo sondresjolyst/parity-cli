@@ -11,11 +11,19 @@ include_forks: false
 
 branch_name: parity/sync-standards
 
+dependency_manager: dependabot
+dependency_manager_repos:
+  nstuning-app: renovate
+renovate_preset: github>sondresjolyst/si-renovate-config
+renovate_remove_codeowners: true
+
 workflows:
   dependency-review.yml:
     languages: [all]
     visibility: public   # dependency-review needs a public repo / GHAS
-  dependabot-title.yml: [all]
+  dependabot-title.yml:
+    languages: [all]
+    manager: dependabot
 
 settings:
   delete_branch_on_merge: true

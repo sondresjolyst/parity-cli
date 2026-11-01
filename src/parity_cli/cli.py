@@ -23,7 +23,7 @@ from .model import Kind, Status
 
 app = typer.Typer(
     add_completion=False,
-    help="See and fix drift in dependabot.yml, CODEOWNERS and shared workflows.",
+    help="See and fix drift in dependabot.yml, renovate.json, CODEOWNERS and shared workflows.",
     no_args_is_help=True,
 )
 console = Console()
@@ -89,7 +89,7 @@ def status(config: Path = CONFIG_OPT) -> None:
     table = Table(show_lines=False)
     table.add_column("Repo", no_wrap=True)
     table.add_column("Languages")
-    table.add_column("Dependabot")
+    table.add_column("Updates")
     table.add_column("CODEOWNERS")
     table.add_column("Workflows")
 
@@ -97,13 +97,13 @@ def status(config: Path = CONFIG_OPT) -> None:
         if r.error:
             table.add_row(r.repo, "[red]error[/]", r.error, "", "")
             continue
-        cells = {"dependabot": [], "codeowners": [], "workflow": []}
+        cells = {"dependabot": [], "renovate": [], "codeowners": [], "workflow": []}
         for f in r.files:
             cells[f.kind.value].append(f.status)
         table.add_row(
             r.repo,
             ", ".join(r.languages) or "-",
-            _cell(cells["dependabot"]),
+            _cell(cells["dependabot"] + cells["renovate"]),
             _cell(cells["codeowners"]),
             _cell(cells["workflow"]),
         )
