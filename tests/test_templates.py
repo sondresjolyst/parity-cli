@@ -165,12 +165,12 @@ def test_removable_manager_files_for_renovate(config):
     assert templates.removable_manager_files(
         _renovate(config, dependency_manager_repos={}, renovate_remove_codeowners=False),
         "r",
-    ) == [(templates.DEPENDABOT_PATH, Kind.DEPENDABOT)]
+    ) == [(templates.DEPENDABOT_PATH, Kind.RENOVATE)]
     assert templates.removable_manager_files(
         _renovate(config, dependency_manager_repos={}, renovate_remove_codeowners=True),
         "r",
     ) == [
-        (templates.DEPENDABOT_PATH, Kind.DEPENDABOT),
+        (templates.DEPENDABOT_PATH, Kind.RENOVATE),
         (templates.CODEOWNERS_PATH, Kind.CODEOWNERS),
     ]
 

@@ -133,9 +133,13 @@ workflows:
 
 - A Renovate repo gets a `renovate.json` that extends the preset. `apply` removes
   its `dependabot.yml`.
+- Install the Renovate app on a repo before `apply` removes its `dependabot.yml`.
 - A `renovate.json` matches as long as it extends the preset, so a repo can add
-  its own rules.
-- A Dependabot repo's `renovate.json` is left alone.
+  its own rules. If the preset is missing, `apply` adds it and keeps the rest.
+- A repo with an invalid `renovate.json`, or with its Renovate config in another
+  location, shows as an error and is not changed.
+- A Dependabot repo's `renovate.json` is left alone. Remove it by hand when moving
+  a repo back, or both tools open PRs.
 - Only set `renovate_remove_codeowners` where branch protection does not require
   code owner review.
 

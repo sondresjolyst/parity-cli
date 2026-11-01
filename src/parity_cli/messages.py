@@ -13,7 +13,7 @@ def _noun(kind: Kind, files: list[FileResult]) -> str:
     if kind is Kind.DEPENDABOT:
         return "`dependabot.yml`"
     if kind is Kind.RENOVATE:
-        return "`renovate.json`"
+        return _join([f"`{f.path.rsplit('/', 1)[-1]}`" for f in sorted(files, key=lambda x: x.path)])
     if kind is Kind.CODEOWNERS:
         return "`CODEOWNERS`"
     if kind is Kind.FILE:

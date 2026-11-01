@@ -65,7 +65,7 @@ def test_empty():
 def test_renovate_migration_message():
     subject, body = messages.build([
         _fr("renovate.json", Kind.RENOVATE, Status.MISSING),
-        _fr(".github/dependabot.yml", Kind.DEPENDABOT, Status.EXTRA),
+        _fr(".github/dependabot.yml", Kind.RENOVATE, Status.EXTRA),
     ])
     assert subject == "ci: add `renovate.json`; remove `dependabot.yml`"
     assert "- add `renovate.json`" in body
