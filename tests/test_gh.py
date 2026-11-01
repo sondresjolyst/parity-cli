@@ -1,3 +1,5 @@
+import pytest
+
 from parity_cli import gh
 
 
@@ -127,3 +129,34 @@ def test_list_repos_for_teams_dedups_and_sorts(monkeypatch):
         gh.Repo("bravo", "my-org/bravo", "main", False, False, False),
         gh.Repo("charlie", "my-org/charlie", "main", False, False, False),
     ]
+
+
+class _Proc:
+    def __init__(self, stdout="", stderr="", returncode=0):
+        self.stdout, self.stderr, self.returncode = stdout, stderr, returncode
+
+
+def test_repo_paths_lists_files_only(monkeypatch):
+    body = '{"truncated": false, "tree": [{"path": "a", "type": "tree"}, {"path": "a/b", "type": "blob"}]}'
+    monkeypatch.undo()
+    monkeypatch.setattr(gh, "_run", lambda *a, **k: _Proc(body))
+    assert gh.repo_paths("o/r", "main") == {"a/b"}
+
+
+def test_repo_paths_is_none_when_truncated(monkeypatch):
+    monkeypatch.undo()
+    monkeypatch.setattr(gh, "_run", lambda *a, **k: _Proc('{"truncated": true, "tree": []}'))
+    assert gh.repo_paths("o/r", "main") is None
+
+
+def test_repo_paths_is_empty_for_an_empty_repo(monkeypatch):
+    monkeypatch.undo()
+    monkeypatch.setattr(gh, "_run", lambda *a, **k: _Proc(stderr="HTTP 409", returncode=1))
+    assert gh.repo_paths("o/r", "main") == set()
+
+
+def test_repo_paths_raises_on_rate_limit(monkeypatch):
+    monkeypatch.undo()
+    monkeypatch.setattr(gh, "_run", lambda *a, **k: _Proc(stderr="API rate limit exceeded", returncode=1))
+    with pytest.raises(gh.GhError):
+        gh.repo_paths("o/r", "main")

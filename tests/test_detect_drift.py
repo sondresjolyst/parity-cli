@@ -264,3 +264,57 @@ def test_missing_npmrc_gets_the_template():
     result = _npmrc_result(None)
     assert result.status is Status.MISSING
     assert result.desired == _NPMRC
+
+
+def test_scan_reads_only_files_the_tree_lists(config, monkeypatch):
+    moved = _renovate_config(config)
+    reads = []
+
+    def get_file(_r, path, _b):
+        reads.append(path)
+        return "{}"
+
+    monkeypatch.setattr(gh, "languages", lambda *a, **k: {"TypeScript": 1})
+    monkeypatch.setattr(gh, "repo_paths", lambda *a, **k: {".github/dependabot.yml"})
+    monkeypatch.setattr(gh, "get_file", get_file)
+    monkeypatch.setattr(gh, "has_workflow_files", lambda *a, **k: pytest.fail("use the tree"))
+    result = drift.scan_repo(_REPO, moved)
+    assert reads == [".github/dependabot.yml"]
+    assert any(f.path == "renovate.json" and f.status is Status.MISSING for f in result.files)
+
+
+def test_scan_workflow_check_comes_from_the_tree(config, monkeypatch):
+    seen = []
+    real = drift.desired_files
+
+    def spy(*a, **k):
+        seen.append(k["has_workflows"])
+        return real(*a, **k)
+
+    monkeypatch.setattr(drift, "desired_files", spy)
+    monkeypatch.setattr(gh, "languages", lambda *a, **k: {})
+    monkeypatch.setattr(gh, "get_file", lambda *a, **k: "x")
+    for paths, expected in (({".github/workflows/ci.yml"}, True), ({"README.md"}, False)):
+        monkeypatch.setattr(gh, "repo_paths", lambda *a, paths=paths, **k: paths)
+        drift.scan_repo(_REPO, config)
+        assert seen[-1] is expected
+
+
+def test_scan_falls_back_to_file_reads_when_the_tree_is_truncated(config, monkeypatch):
+    moved = _renovate_config(config)
+    _stub_scan(monkeypatch, {".github/renovate.json": "{}"})
+    monkeypatch.setattr(gh, "repo_paths", lambda *a, **k: None)
+    result = drift.scan_repo(_REPO, moved)
+    assert ".github/renovate.json" in result.error
+
+
+def test_scan_only_touches_the_named_repos(config, monkeypatch):
+    other = gh.Repo("other", "o/other", "main", False, False, False)
+    scanned = []
+    monkeypatch.setattr(drift, "discover_repos", lambda *a, **k: [_REPO, other])
+    monkeypatch.setattr(
+        drift, "scan_repo", lambda repo, _c: scanned.append(repo.name) or drift.RepoResult(repo.name, repo.full_name, "main", [])
+    )
+    moved = replace(config, dependency_manager_repos={})
+    drift.scan(moved, only=["other"])
+    assert scanned == ["other"]

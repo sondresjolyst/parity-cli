@@ -237,6 +237,20 @@ def get_file(full_name: str, path: str, ref: str | None = None) -> str | None:
     return base64.b64decode(data["content"]).decode("utf-8")
 
 
+def repo_paths(full_name: str, ref: str) -> set[str] | None:
+    """Every file path in the repo from one call, or None if GitHub truncated the list."""
+    proc = _run(["api", f"repos/{full_name}/git/trees/{ref}?recursive=1"], check=False)
+    if proc.returncode != 0:
+        # An empty repo has no tree to read.
+        if "Not Found" in proc.stderr or "404" in proc.stderr or "409" in proc.stderr:
+            return set()
+        raise GhError(proc.stderr.strip())
+    data = json.loads(proc.stdout)
+    if data.get("truncated"):
+        return None
+    return {item["path"] for item in data.get("tree", []) if item.get("type") == "blob"}
+
+
 def has_workflow_files(full_name: str, ref: str | None = None) -> bool:
     """True if the repo has at least one file under .github/workflows."""
     url = f"repos/{full_name}/contents/.github/workflows"

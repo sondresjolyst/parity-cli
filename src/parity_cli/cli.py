@@ -83,10 +83,10 @@ def _with_progress(description, run):
         return run(start, step)
 
 
-def _scan(cfg):
+def _scan(cfg, only=None):
     return _with_progress(
         f"scanning {cfg.owner}",
-        lambda start, step: drift.scan(cfg, on_start=start, on_progress=step),
+        lambda start, step: drift.scan(cfg, only=only, on_start=start, on_progress=step),
     )
 
 
@@ -206,9 +206,7 @@ def apply(
     """Create a branch, commit, and open a PR per repo with drift."""
     cfg = config_mod.load(config)
     kinds = _parse_only(only)
-    results = [r for r in _scan(cfg) if r.changed and not r.error]
-    if repo:
-        results = [r for r in results if r.repo in repo]
+    results = [r for r in _scan(cfg, only=repo) if r.changed and not r.error]
     if kinds:
         results = [r for r in results if any(f.kind in kinds for f in r.changed)]
     if not results:

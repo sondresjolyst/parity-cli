@@ -77,10 +77,22 @@ def _compare(desired: DesiredFile, current: str | None) -> FileResult:
     return FileResult(desired.path, desired.kind, status, content, current)
 
 
-def _resolve_python_tool(repo: gh.Repo, dirs: list[str]) -> list[str]:
+def _file_reader(repo: gh.Repo, paths: set[str] | None) -> Callable[[str], str | None]:
+    """Read a repo file, skipping the API call when the tree shows it is absent."""
+    def read(path: str) -> str | None:
+        if paths is not None and path not in paths:
+            return None
+        return gh.get_file(repo.full_name, path, repo.default_branch)
+    return read
+
+
+def _resolve_python_tool(
+    repo: gh.Repo, dirs: list[str], read: Callable[[str], str | None] | None = None
+) -> list[str]:
     if "python" not in dirs:
         return dirs
-    if gh.get_file(repo.full_name, "uv.lock", repo.default_branch) is None:
+    read = read or _file_reader(repo, None)
+    if read("uv.lock") is None:
         return dirs
     return ["uv" if d == "python" else d for d in dirs]
 
@@ -94,32 +106,38 @@ def scan_repo(repo: gh.Repo, config: Config) -> RepoResult:
         private=repo.private,
     )
     try:
+        paths = gh.repo_paths(repo.full_name, repo.default_branch)
+        read = _file_reader(repo, paths)
         langs = gh.languages(repo.full_name)
         dirs = template_dirs(langs, config)
-        dirs = _resolve_python_tool(repo, dirs)
+        dirs = _resolve_python_tool(repo, dirs, read)
         result.languages = dirs
         if config.manager_for(repo.name) == "renovate":
             for path in RENOVATE_ALT_PATHS:
-                if gh.get_file(repo.full_name, path, repo.default_branch) is not None:
+                if read(path) is not None:
                     raise ValueError(f"Renovate config at {path}, move it to renovate.json")
-        has_workflows = gh.has_workflow_files(repo.full_name, repo.default_branch)
+        has_workflows = (
+            gh.has_workflow_files(repo.full_name, repo.default_branch)
+            if paths is None
+            else any(p.startswith(".github/workflows/") for p in paths)
+        )
         desired = desired_files(
             dirs, config, private=repo.private, repo=repo.name,
             full_name=repo.full_name, has_workflows=has_workflows,
         )
         for want in desired:
-            current = gh.get_file(repo.full_name, want.path, repo.default_branch)
+            current = read(want.path)
             result.files.append(_compare(want, current))
         for path in removable_workflow_paths(
             dirs, config, repo.private, repo.name, repo.full_name
         ):
-            current = gh.get_file(repo.full_name, path, repo.default_branch)
+            current = read(path)
             if current is not None:
                 result.files.append(
                     FileResult(path, Kind.WORKFLOW, Status.EXTRA, "", current)
                 )
         for path, kind in removable_manager_files(config, repo.name):
-            current = gh.get_file(repo.full_name, path, repo.default_branch)
+            current = read(path)
             if current is not None:
                 result.files.append(FileResult(path, kind, Status.EXTRA, "", current))
     except (gh.GhError, ValueError) as exc:
@@ -142,6 +160,7 @@ def scan(
     config: Config,
     *,
     workers: int = 8,
+    only: list[str] | None = None,
     on_start: Callable[[int], None] | None = None,
     on_progress: Callable[[], None] | None = None,
 ) -> list[RepoResult]:
@@ -157,6 +176,8 @@ def scan(
             stacklevel=2,
         )
     repos = _selected(repos, config)
+    if only:
+        repos = [r for r in repos if r.name in only]
     if on_start:
         on_start(len(repos))
     results: list[RepoResult] = []
