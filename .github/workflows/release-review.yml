@@ -1,0 +1,32 @@
+name: Request release review
+
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  request:
+    name: Request review
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Request review on the open release PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REVIEWERS: sondresjolyst
+        run: |
+          set -euo pipefail
+          # Matches on the branch, as release PR titles differ between repos.
+          numbers=$(gh pr list --limit 200 --json number,headRefName,reviews,reviewRequests \
+            --jq '.[] | select(.headRefName | startswith("release-please--"))
+              | select((.reviews | length) == 0 and (.reviewRequests | length) == 0) | .number')
+          echo "Release PRs needing a review request: ${numbers:-none}"
+          for number in $numbers; do
+            gh pr edit "$number" --add-reviewer "$REVIEWERS"
+          done
