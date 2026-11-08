@@ -1,6 +1,6 @@
 [project]
 name = "parity-cli"
-version = "0.9.0"
+version = "0.9.1"
 description = "See and fix drift in dependabot.yml, renovate.json, CODEOWNERS and shared workflows across all your GitHub repos"
 readme = "README.md"
 license = "MIT"
