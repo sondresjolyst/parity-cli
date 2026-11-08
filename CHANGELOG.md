@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/sondresjolyst/parity-cli/compare/v0.9.0...v0.9.1) (2026-11-08)
+
+
+### Dependencies
+
+* **uv:** update uv_build from ==0.13.1 to ==0.13.6 ([274d6df](https://github.com/sondresjolyst/parity-cli/commit/274d6df8d1cf4fb3028b56b791ca403433279289))
+
 ## [0.9.0](https://github.com/sondresjolyst/parity-cli/compare/v0.8.1...v0.9.0) (2026-11-01)
 
 
